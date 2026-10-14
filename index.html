@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dagregister</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#14161a;--panel:#1c1f25;--panel2:#23272f;--line:#2f343d;--text:#e9ebee;--muted:#8d95a3;
+  --acc:#ff7a1a;--acc2:#ffb15c;--ok:#3ccf8e;--warn:#ffcc4d;--bad:#ff5d5d;--blue:#5aa9ff;
+  --radius:12px;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+:root[data-theme="light"]{
+  --bg:#f3f1ec;--panel:#ffffff;--panel2:#f7f5f1;--line:#e2ded6;--text:#1d1f23;--muted:#6b7280;
+  --acc:#e2620a;--acc2:#b85a10;--ok:#14935c;--warn:#b98500;--bad:#d23a3a;--blue:#2b74d6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--acc)}
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topin{display:flex;align-items:center;gap:16px;padding:10px 20px;max-width:1500px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.3px;white-space:nowrap}
+.logo{width:30px;height:30px;border-radius:8px;background:repeating-linear-gradient(135deg,var(--acc) 0 6px,#1a1a1a 6px 12px);box-shadow:inset 0 0 0 2px var(--acc)}
+.brand small{display:block;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:0}
+nav{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none}
+nav button{background:none;border:0;padding:8px 12px;border-radius:8px;color:var(--muted);cursor:pointer;white-space:nowrap;font-weight:600}
+nav button:hover{color:var(--text);background:var(--panel2)}
+nav button.on{color:var(--text);background:var(--panel2);box-shadow:inset 0 -2px 0 var(--acc)}
+nav button.locked{opacity:.35}
+.navgrp{align-self:center;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:0 4px 0 6px;opacity:.7}
+.navsep{width:1px;background:var(--line);margin:4px 8px}
+.topact{align-items:center}
+.topact{display:flex;gap:6px}
+main{max-width:1500px;margin:0 auto;padding:20px}
+.btn{background:var(--panel2);border:1px solid var(--line);padding:8px 14px;border-radius:9px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#1a0d00}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#03200f}
+.btn.bad{background:transparent;border-color:var(--bad);color:var(--bad)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn.icon{padding:7px 10px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sp{flex:1}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+h1{font-size:24px;margin:0 0 4px}
+h2{font-size:16px;margin:0 0 12px}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.kpi b{display:block;font-size:26px;font-family:var(--mono);font-weight:700;margin-top:4px}
+.kpi span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+input[type=email],input[type=text],input[type=number],input[type=date],input[type=time],input[type=password],select,textarea{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none;min-width:0}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:600}
+label.f>*{color:var(--text);font-weight:400;font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}main{padding:14px}.topin{padding:10px 14px;flex-wrap:wrap}}
+/* today */
+.hero{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.clock{font-family:var(--mono);font-size:56px;font-weight:700;letter-spacing:-1px;line-height:1}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.tile{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;transition:transform .08s,border-color .15s;min-height:132px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.tile:hover{border-color:var(--muted)}
+.tile:active{transform:scale(.98)}
+.tile.in{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok) inset}
+.tile.in::after{content:"";position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 70%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+.tile.abs{opacity:.7;border-style:dashed}
+.who{display:flex;gap:10px;align-items:center}
+.av{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;font-weight:800;color:#111;flex:none;font-size:15px}
+.who b{display:block;font-size:16px}
+.who small{color:var(--muted)}
+.jobchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.timer{font-family:var(--mono);font-size:22px;font-weight:700}
+.tile .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.4px}
+.p-in{background:color-mix(in srgb,var(--ok) 20%,transparent);color:var(--ok)}
+.p-out{background:var(--panel2);color:var(--muted)}
+.p-abs{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.p-warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.p-done{background:color-mix(in srgb,var(--blue) 18%,transparent);color:var(--blue)}
+/* register */
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);background:var(--panel2);position:sticky;top:0;z-index:1}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+tbody tr:hover td{background:color-mix(in srgb,var(--panel2) 60%,transparent)}
+.reg td.c{padding:4px;text-align:center;min-width:78px;position:relative}
+.reg th.today,.reg td.today{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.reg th.we,.reg td.we{opacity:.75}
+.cell{display:flex;flex-direction:column;align-items:center;gap:3px}
+.cell input{width:58px;text-align:center;font-family:var(--mono);font-weight:700;padding:6px 4px;background:transparent;border:1px solid transparent}
+.cell input:hover{border-color:var(--line)}
+.cell input:focus{background:var(--panel2);border-color:var(--acc)}
+.cell.has input{color:var(--text)}
+.bars{display:flex;height:4px;width:54px;border-radius:2px;overflow:hidden;background:var(--line)}
+.bars i{display:block;height:100%}
+.tag{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;text-transform:uppercase;cursor:pointer}
+.more{position:absolute;top:2px;right:2px;opacity:0;background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px}
+td.c:hover .more{opacity:1}
+.c-absent{background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.namecell{display:flex;gap:8px;align-items:center}
+.namecell .av{width:28px;height:28px;font-size:11px;border-radius:8px}
+/* jobs */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;cursor:pointer;position:relative;overflow:hidden}
+.card:hover{border-color:var(--muted)}
+.card .stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+.prog{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:10px 0 6px}
+.prog i{display:block;height:100%;border-radius:6px}
+.code{font-family:var(--mono);font-size:12px;color:var(--muted)}
+/* charts */
+.hbar{display:grid;grid-template-columns:minmax(90px,200px) 1fr 80px;gap:10px;align-items:center;margin:7px 0;font-size:13px}
+.hbar .t{height:16px;background:var(--panel2);border-radius:5px;overflow:hidden}
+.hbar .t i{display:block;height:100%;border-radius:5px}
+.hbar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cols{display:flex;align-items:flex-end;gap:3px;height:160px;padding-top:10px}
+.cols div{flex:1;background:var(--acc);border-radius:3px 3px 0 0;min-height:1px;position:relative;opacity:.85}
+.cols div:hover{opacity:1}
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px}
+.heat i{width:13px;height:13px;border-radius:3px;background:var(--panel2)}
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:5vh 14px;overflow:auto;animation:fade .12s}
+@keyframes fade{from{opacity:0}}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:100%;max-width:620px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal.wide{max-width:900px}
+.mhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.mhead h2{margin:0;font-size:19px}
+.x{margin-left:auto;background:none;border:0;font-size:22px;color:var(--muted);cursor:pointer}
+.jobpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;max-height:46vh;overflow:auto;padding:2px}
+.jobbtn{text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;gap:8px;align-items:flex-start}
+.jobbtn:hover{border-color:var(--acc)}
+.jobbtn b{display:block;font-size:13px}
+.jobbtn small{color:var(--muted);font-size:11px}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{background:none;border:0;padding:5px 10px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:600;font-size:13px}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.lines .ln{display:grid;grid-template-columns:1fr 90px 34px;gap:8px;margin-bottom:8px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:10px;font-weight:600;z-index:99;animation:fade .15s}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+.banner{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px}
+.sec{margin-top:22px}
+hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+.money{font-family:var(--mono)}
+.lockscreen{text-align:center;padding:60px 20px}
+.authbox{max-width:420px;margin:8vh auto;padding:28px}
+.sync{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block}
+.sync.saving{background:var(--warn)}.sync.err{background:var(--bad)}
+.whobox{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+/* payslip print */
+#print{display:none}
+.slip{background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;width:180mm;margin:0 auto 10mm;padding:10mm;border:1px solid #ccc;page-break-after:always;font-size:12px}
+.slip h3{margin:0;font-size:16px}
+.slip table td,.slip table th{border:1px solid #999;padding:5px 7px;color:#111;background:#fff;position:static;font-size:12px;text-transform:none;letter-spacing:0}
+.slip .net{font-size:16px;font-weight:700;background:#f2f2f2}
+@media print{
+  body>*:not(#print){display:none!important}
+  #print{display:block}
+  .slip{border:0;margin:0 auto}
+  body{background:#fff}
+  .pr-table{color:#111}
+  .pr-table th,.pr-table td{color:#111;background:#fff;border:1px solid #999;font-size:10px;padding:3px 5px}
+}
+</style>
+</head>
+<body>
+<div class="top"><div class="topin">
+  <div class="brand"><div class="logo"></div><div>Dagregister<small id="coName"></small></div></div>
+  <nav id="nav"></nav>
+  <div class="topact">
+    <span class="whobox"><span id="sync" class="sync ok" title="All changes saved"></span><span id="who"></span></span>
+    <button class="btn sm" data-act="newjob" title="Add a new job">+ Job</button>
+    <button class="btn sm" data-act="newemp" id="qPerson" title="Add a new person">+ Person</button>
+    <button class="btn icon ghost" data-act="theme" title="Light / dark">☀︎ / ☾</button>
+    <button class="btn icon ghost" data-act="lock" id="lockBtn" title="Lock manager areas">🔓</button>
+    <button class="btn sm ghost" data-act="signout">Sign out</button>
+  </div>
+</div></div>
+<main id="app"></main>
+<div id="print"></div>
+
+<script>
+const KEY='dagregister.v1';
+const TABS=[['today','Today'],['register','Week register'],['jobs','Jobs'],['people','People'],['pay','Payroll'],['reports','Reports'],['settings','Settings']];
+const LOCKED_TABS=['people','reports','pay','settings'];
+const CODES={
+  absent:{l:'Absent',c:'var(--bad)',off:1},
+  absent_r:{l:'Absent (reason)',c:'#ff8f6b',off:1},
+  sick:{l:'Sick',c:'#c78bff',off:1},
+  leave:{l:'Leave',c:'var(--blue)',off:1},
+  rain:{l:'Rain',c:'#4fc3d9',off:1},
+  holiday:{l:'Public holiday',c:'#9aa3b2',off:1},
+  late:{l:'Late',c:'var(--warn)'},
+  early:{l:'Left early',c:'var(--warn)'},
+  note:{l:'Note',c:'var(--muted)'}
+};
+const PALETTE=['#ff7a1a','#3ccf8e','#5aa9ff','#ffcc4d','#c78bff','#ff5d8f','#4fc3d9','#a3d65c','#ff9f6b','#7f8cff','#e6b07a','#5fd1b0'];
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ---------- utils ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const pad=n=>String(n).padStart(2,'0');
+const toISO=d=>d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+const parse=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};
+const addDays=(s,n)=>{const d=parse(s);d.setUTCDate(d.getUTCDate()+n);return toISO(d)};
+const dow=s=>parse(s).getUTCDay();
+const todayISO=()=>{const n=new Date();return n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate())};
+const nowHM=()=>{const n=new Date();return pad(n.getHours())+':'+pad(n.getMinutes())};
+const weekStart=s=>addDays(s,-((dow(s)-5+7)%7)); // pay week starts Friday
+const weekDays=ws=>[0,1,2,3,4,5,6].map(i=>addDays(ws,i));
+function weekNo(ws){const y=+ws.slice(0,4);let f=y+'-01-01';while(dow(f)!==5)f=addDays(f,1);return Math.round((parse(ws)-parse(f))/864e5/7)+1}
+const fmtD=s=>{const d=parse(s);return d.getUTCDate()+' '+MON[d.getUTCMonth()]};
+const fmtDL=s=>{const d=parse(s);return DOW[d.getUTCDay()]+' '+d.getUTCDate()+' '+MON[d.getUTCMonth()]+' '+d.getUTCFullYear()};
+const h2=n=>(Math.round(n*100)/100).toString();
+const hm=mins=>{mins=Math.max(0,Math.floor(mins));return Math.floor(mins/60)+'h '+pad(mins%60)+'m'};
+const money=n=>(S.settings.cur||'R')+' '+(Math.round(n*100)/100).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+const toMin=t=>{const[a,b]=t.split(':').map(Number);return a*60+b};
+const initials=s=>s.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase();
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+/* ---------- state ---------- */
+let S, IDX, UI={tab:'today',week:weekStart(todayISO()),jobFilter:'active',jobQ:'',peopleFilter:'active',range:'thisweek',from:'',to:'',payWeek:weekStart(todayISO()),locked:false};
+function defaults(){
+  return {v:1,settings:{company:'BOLAND 3D SOLUTIONS (PTY) LTD',address:'22c Krone Street\nWorcester\n6850',cur:'R',
+    dayStart:'07:30',dayEnd:'16:30',lunchFrom:'12:30',lunchTo:'13:00',round:15,grace:10,
+    std:{0:0,1:8,2:8,3:8,4:8,5:6,6:0},defJob:'j-gen',pin:'',theme:'dark'},
+    emps:[],jobs:[
+      {id:'j-imp',code:'J000',name:'Unallocated (imported from Excel)',client:'',quote:0,status:'done',color:'#8d95a3'},
+      {id:'j-gen',code:'J001',name:'Workshop general',client:'Internal',quote:0,status:'active',color:'#5aa9ff'},
+      {id:'j-mnt',code:'J002',name:'Cleaning & maintenance',client:'Internal',quote:0,status:'active',color:'#a3d65c'},
+      {id:uid(),code:'J101',name:'Example: Carport 6x6m',client:'Example client',quote:120,status:'active',color:'#ff7a1a'}],
+    entries:[],notes:{},adv:[],deds:{},clocks:{}};
+}
+/* ---------- cloud (Supabase) ---------- */
+const SB_URL='https://wdvownwsobsfhpelrlcb.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indkdm93bndzb2JzZmhwZWxybGNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIwMDA5ODIsImV4cCI6MjEwNzU3Njk4Mn0.ueb0mXdQ1oPu9A1UYi9BqbQa_u8AmLRMilGpFrmEBBQ';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+let ME=null,PROFILES=[],SNAP=new Map(),pendingRender=false,syncState='ok',flushing=false,flushAgain=false;
+const SEP='\u0001';
+function canon(v){
+  if(Array.isArray(v))return '['+v.map(x=>x===undefined?'null':canon(x)).join(',')+']';
+  if(v&&typeof v==='object')return '{'+Object.keys(v).filter(k=>v[k]!==undefined).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}';
+  return JSON.stringify(v===undefined?null:v);
+}
+function toRecs(s){
+  const m=new Map(),put=(k,id,d)=>m.set(k+SEP+id,canon(d));
+  s.emps.forEach(x=>put('emp',x.id,x));s.jobs.forEach(x=>put('job',x.id,x));s.entries.forEach(x=>put('entry',x.id,x));
+  for(const k in s.notes)put('note',k,s.notes[k]);s.adv.forEach(x=>put('adv',x.id,x));
+  for(const k in s.deds)put('ded',k,s.deds[k]);for(const k in s.clocks)put('clock',k,s.clocks[k]);
+  put('settings','main',s.settings);return m;
+}
+function applyRec(s,kind,id,data){ // data null => delete
+  const arr={emp:'emps',job:'jobs',entry:'entries',adv:'adv'}[kind],map={note:'notes',ded:'deds',clock:'clocks'}[kind];
+  if(arr){const i=s[arr].findIndex(x=>x.id===id);if(data===null){if(i>=0)s[arr].splice(i,1)}else if(i>=0)s[arr][i]=data;else s[arr].push(data)}
+  else if(map){if(data===null)delete s[map][id];else s[map][id]=data}
+  else if(kind==='settings'&&data)s.settings={...defaults().settings,...data};
+}
+function emptyState(){const s=defaults();s.jobs=[];return s}
+async function loadData(){
+  const rows=[];
+  for(let from=0;;from+=1000){
+    const{data,error}=await sb.from('records').select('kind,id,data').order('kind').order('id').range(from,from+999);
+    if(error)throw error;rows.push(...data);if(data.length<1000)break;
+  }
+  S=emptyState();SNAP=new Map();
+  for(const r of rows){applyRec(S,r.kind,r.id,r.data);SNAP.set(r.kind+SEP+r.id,canon(r.data))}
+  if(!rows.some(r=>r.kind==='settings'))S.settings=defaults().settings;
+  reindex();return rows.length;
+}
+function save(){reindex();clearTimeout(save.t);save.t=setTimeout(flush,400);setSync('saving')}
+async function flush(){
+  if(flushing){flushAgain=true;return}
+  flushing=true;
+  const cur=toRecs(S),ups=[],dels=[],prev=new Map();
+  for(const[k,v]of cur)if(SNAP.get(k)!==v){ups.push(k);prev.set(k,SNAP.get(k));SNAP.set(k,v)}
+  for(const k of [...SNAP.keys()])if(!cur.has(k)){dels.push(k);prev.set(k,SNAP.get(k));SNAP.delete(k)}
+  let ok=true;
+  try{
+    for(let i=0;i<ups.length;i+=500){
+      const rows=ups.slice(i,i+500).map(k=>{const[kind,id]=k.split(SEP);return{kind,id,data:JSON.parse(cur.get(k))}});
+      const{error}=await sb.from('records').upsert(rows);if(error)throw error;
+    }
+    const byKind={};dels.forEach(k=>{const[kind,id]=k.split(SEP);(byKind[kind]=byKind[kind]||[]).push(id)});
+    for(const kind in byKind)for(let i=0;i<byKind[kind].length;i+=200){
+      const{error}=await sb.from('records').delete().eq('kind',kind).in('id',byKind[kind].slice(i,i+200));if(error)throw error;
+    }
+  }catch(e){
+    ok=false;console.error(e);
+    for(const[k,v]of prev){if(v===undefined)SNAP.delete(k);else SNAP.set(k,v)} // retry next time
+    toast('⚠ Not saved – check internet connection. Will retry.');setTimeout(()=>save(),8000);
+  }
+  flushing=false;setSync(ok?'ok':'err');
+  if(flushAgain){flushAgain=false;flush()}
+}
+function setSync(s){syncState=s;const el=$('#sync');if(el){el.className='sync '+s;el.title={ok:'All changes saved',saving:'Saving…',err:'Not saved – offline?'}[s]}}
+window.addEventListener('beforeunload',e=>{if(syncState!=='ok'){e.preventDefault();e.returnValue=''}});
+function subscribe(){
+  sb.channel('records').on('postgres_changes',{event:'*',schema:'public',table:'records'},p=>{
+    const r=p.eventType==='DELETE'?p.old:p.new;if(!r||!r.kind)return;
+    const k=r.kind+SEP+r.id;
+    if(p.eventType==='DELETE'){if(!SNAP.has(k))return;SNAP.delete(k);applyRec(S,r.kind,r.id,null)}
+    else{const v=canon(r.data);if(SNAP.get(k)===v)return;SNAP.set(k,v);applyRec(S,r.kind,r.id,r.data)}
+    reindex();renderSoon();
+  }).subscribe();
+  sb.channel('profiles').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},()=>{loadProfiles().then(()=>{renderNav();if(UI.tab==='settings')renderSoon()})}).subscribe();
+}
+function renderSoon(){
+  const a=document.activeElement;
+  if($('#scrim')||(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&a.closest('#app'))){pendingRender=true;return}
+  render();
+}
+document.addEventListener('focusout',()=>setTimeout(()=>{if(pendingRender&&!$('#scrim')){const a=document.activeElement;if(!(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))){pendingRender=false;render()}}},50));
+async function loadProfiles(){const{data}=await sb.from('profiles').select('*').order('created_at');PROFILES=data||[]}
+const isOwner=()=>ME&&ME.role==='owner';
+
+/* ---------- auth screens ---------- */
+function shell(on){document.querySelector('.top nav').style.visibility=on?'':'hidden';document.querySelector('.topact').style.visibility=on?'':'hidden'}
+function authView(mode='in',msg=''){
+  shell(false);
+  $('#app').innerHTML=`<div class="authbox panel">
+   <div class="brand" style="margin-bottom:6px"><div class="logo"></div><div style="font-size:20px">Dagregister<small>Attendance &amp; job time</small></div></div>
+   <div class="seg" style="margin:16px 0"><button class="${mode==='in'?'on':''}" data-auth="in">Sign in</button><button class="${mode==='up'?'on':''}" data-auth="up">Create account</button></div>
+   ${msg?`<div class="banner">${msg}</div>`:''}
+   <form id="authForm" style="display:flex;flex-direction:column;gap:12px">
+    ${mode==='up'?'<label class="f">Your name<input type="text" name="name" required autocomplete="name"></label>':''}
+    <label class="f">Email<input type="email" name="email" required autocomplete="email" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px"></label>
+    ${mode!=='reset'?`<label class="f">Password<input type="password" name="password" required minlength="6" autocomplete="${mode==='up'?'new-password':'current-password'}"></label>`:''}
+    <button class="btn pri" type="submit">${mode==='up'?'Create account':mode==='reset'?'Send reset link':'Sign in'}</button>
+    ${mode==='in'?'<a href="#" data-auth="reset" style="font-size:13px">Forgot password?</a>':''}
+    ${mode==='reset'?'<a href="#" data-auth="in" style="font-size:13px">Back to sign in</a>':''}
+   </form>
+   <div class="muted" style="font-size:12px;margin-top:14px">New accounts must be approved by the owner before they can see any data.</div></div>`;
+  $('#authForm').onsubmit=async ev=>{
+    ev.preventDefault();const f=Object.fromEntries(new FormData(ev.target));const btn=ev.target.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Please wait…';
+    const back=location.origin+location.pathname;
+    try{
+      if(mode==='up'){
+        const{data,error}=await sb.auth.signUp({email:f.email,password:f.password,options:{data:{name:f.name},emailRedirectTo:back}});
+        if(error)throw error;
+        if(data.session)return afterLogin();
+        return authView('in','Account created. Check your email and click the confirmation link, then sign in here.');
+      }
+      if(mode==='reset'){const{error}=await sb.auth.resetPasswordForEmail(f.email,{redirectTo:back});if(error)throw error;return authView('in','If that email has an account, a reset link is on its way.')}
+      const{error}=await sb.auth.signInWithPassword({email:f.email,password:f.password});if(error)throw error;
+      afterLogin();
+    }catch(e){authView(mode,esc(e.message||'Something went wrong'))}
+  };
+}
+document.addEventListener('click',ev=>{const a=ev.target.closest('[data-auth]');if(a){ev.preventDefault();authView(a.dataset.auth)}});
+function pendingView(){
+  shell(false);
+  $('#app').innerHTML=`<div class="authbox panel"><div style="font-size:40px">⏳</div><h1>Waiting for approval</h1>
+  <p class="muted">Hi ${esc(ME?.name||ME?.email||'')}, your account is created. The owner must approve it before you can see the register. This page will open automatically once you're approved.</p>
+  <div class="row"><button class="btn" onclick="afterLogin()">Check again</button><button class="btn ghost" data-act="signout">Sign out</button></div></div>`;
+  clearTimeout(pendingView.t);pendingView.t=setTimeout(afterLogin,15000);
+}
+function importView(n){
+  shell(true);renderNav();
+  $('#app').innerHTML=`<div class="authbox panel" style="max-width:560px"><div style="font-size:40px">📥</div><h1>Database is empty</h1>
+  ${isOwner()?`<p class="muted">Load your starting data: choose <b>dagregister-start.json</b> (in your Daily time shedaul folder – it holds the people, hours, notes and advances from Dag Register 5.xlsx), or a backup you downloaded from the app.</p>
+  <div class="row"><label class="btn pri">Choose data file<input type="file" accept=".json" data-act="import" hidden></label><button class="btn" data-act="blank">Start empty</button></div><div id="impMsg" class="muted" style="margin-top:12px"></div>`
+  :`<p class="muted">The owner hasn't loaded the starting data yet. Try again a bit later.</p><button class="btn" onclick="location.reload()">Reload</button>`}</div>`;
+}
+function stateFromFile(d){
+  if(d.ents&&d.emps){ // start file (from Excel)
+    const s=defaults();
+    s.emps=d.emps.map((e,i)=>({...e,color:PALETTE[i%PALETTE.length]}));
+    s.entries=d.ents.map(([dt,e,h,r])=>({id:uid(),e,d:dt,j:'j-imp',h,r,src:'xls'}));
+    for(const k in d.notes){const[c,t]=d.notes[k];s.notes[k]={c,t}}
+    s.adv=d.adv.map(([dt,e,a,n])=>({id:uid(),e,d:dt,amt:a,note:n}));
+    return s;
+  }
+  if(d.entries&&d.emps){const s={...emptyState(),...d};s.settings={...defaults().settings,...d.settings};return s}
+  throw new Error('Not a Dagregister data file');
+}
+async function afterLogin(){
+  clearTimeout(pendingView.t);
+  const{data:{user}}=await sb.auth.getUser();
+  if(!user)return authView();
+  const{data:p}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  ME=p||{email:user.email,role:'pending'};
+  if(ME.role==='pending')return pendingView();
+  $('#app').innerHTML='<div class="empty">Loading register…</div>';
+  try{const n=await loadData();await loadProfiles();if(!afterLogin.sub){subscribe();afterLogin.sub=1}
+    shell(true);$('#who').textContent=ME.name||ME.email;
+    if(!n)return importView();
+    render();
+  }catch(e){$('#app').innerHTML=`<div class="empty">Could not load data: ${esc(e.message)}<br><br><button class="btn" onclick="location.reload()">Retry</button></div>`}
+}
+sb.auth.onAuthStateChange((ev)=>{
+  if(ev==='PASSWORD_RECOVERY'){setTimeout(async()=>{const p=prompt('Choose a new password (min 6 characters)');if(p){const{error}=await sb.auth.updateUser({password:p});toast(error?error.message:'Password changed')}},300)}
+  if(ev==='SIGNED_OUT')location.reload();
+});
+function usersPanel(){
+  const pend=PROFILES.filter(p=>p.role==='pending').length;
+  return `<div class="panel sec"><h2>Users &amp; access ${pend?`<span class="pill p-warn">${pend} waiting</span>`:''}</h2>
+  <div class="muted" style="font-size:12px;margin-bottom:10px">Send your admins the link to this page. They click “Create account”, then appear here. ${isOwner()?'Set them to <b>Admin</b> to give access. Only owners can approve or remove users.':'Only the owner can change access.'}</div>
+  <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Signed up</th><th>Access</th><th></th></tr></thead><tbody>
+  ${PROFILES.map(p=>`<tr><td>${esc(p.name||'')}</td><td>${esc(p.email)}</td><td>${fmtD(p.created_at.slice(0,10))} ${p.created_at.slice(0,4)}</td>
+   <td>${isOwner()&&p.id!==ME.id?`<select data-role="${p.id}">${[['pending','⏳ Waiting / blocked'],['admin','Admin'],['owner','Owner']].map(([k,l])=>`<option value="${k}" ${p.role===k?'selected':''}>${l}</option>`).join('')}</select>`:`<span class="pill ${p.role==='pending'?'p-warn':'p-in'}">${p.role}</span>`}</td>
+   <td>${isOwner()&&p.id!==ME.id?`<button class="btn sm bad" data-act="rmuser" data-v="${p.id}">Remove</button>`:''}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+}
+
+function reindex(){
+  IDX={byED:new Map(),emp:new Map(),job:new Map()};
+  for(const e of S.emps)IDX.emp.set(e.id,e);
+  for(const j of S.jobs)IDX.job.set(j.id,j);
+  for(const en of S.entries){const k=en.e+'|'+en.d;if(!IDX.byED.has(k))IDX.byED.set(k,[]);IDX.byED.get(k).push(en)}
+}
+const cellEntries=(e,d)=>IDX.byED.get(e+'|'+d)||[];
+const cellHours=(e,d)=>cellEntries(e,d).reduce((a,x)=>a+(+x.h||0),0);
+const emp=id=>IDX.emp.get(id)||{name:'?',nick:'?',color:'#888',rate:0};
+const job=id=>IDX.job.get(id)||{name:'(deleted job)',code:'—',color:'#666'};
+const nm=e=>e.nick||e.name;
+const avatar=e=>`<div class="av" style="background:${e.color}">${esc(initials(nm(e)))}</div>`;
+const activeEmps=()=>S.emps.filter(e=>e.active).sort((a,b)=>nm(a).localeCompare(nm(b)));
+function empsForRange(a,b){
+  const ids=new Set();
+  for(const en of S.entries)if(en.d>=a&&en.d<=b)ids.add(en.e);
+  for(const k in S.notes){const[e,d]=k.split('|');if(d>=a&&d<=b)ids.add(e)}
+  return S.emps.filter(e=>ids.has(e.id)||(e.active&&(!e.start||e.start<=b))).sort((x,y)=>nm(x).localeCompare(nm(y)));
+}
+const openJobs=()=>S.jobs.filter(j=>j.status==='active');
+function roundH(mins){const r=+S.settings.round||1;return Math.round(mins/r)*r/60}
+function workedMinutes(d,a,b){ // a,b "HH:MM"; subtract lunch overlap
+  let m=toMin(b)-toMin(a); if(m<0)m=0;
+  const lf=toMin(S.settings.lunchFrom||'00:00'),lt=toMin(S.settings.lunchTo||'00:00');
+  const ov=Math.max(0,Math.min(toMin(b),lt)-Math.max(toMin(a),lf));
+  return m-ov;
+}
+const money_on=()=>!UI.locked;
+
+/* ---------- clock actions ---------- */
+function clockIn(e,j){
+  const d=todayISO(),t=nowHM();
+  S.clocks[e]={j,d,t};
+  const k=e+'|'+d;
+  // auto-late flag on first clock-in of the day
+  if(!cellEntries(e,d).length&&!S.notes[k]&&toMin(t)>toMin(S.settings.dayStart)+(+S.settings.grace||0))
+    S.notes[k]={c:'late',t:'Clocked in '+t};
+  if(S.notes[k]&&CODES[S.notes[k].c]?.off)delete S.notes[k];
+  save();
+}
+function clockOut(e,endT){
+  const c=S.clocks[e];if(!c)return;
+  let t=endT||(c.d===todayISO()?nowHM():S.settings.dayEnd);
+  const mins=workedMinutes(c.d,c.t,t);
+  const h=roundH(mins);
+  if(h>0)S.entries.push({id:uid(),e,d:c.d,j:c.j,h,r:emp(e).rate,a:c.t,b:t,src:'clock'});
+  delete S.clocks[e];save();
+  return h;
+}
+
+/* ---------- render shell ---------- */
+function renderNav(){
+  const b=([k,l])=>`<button class="${UI.tab===k?'on':''} ${UI.locked&&LOCKED_TABS.includes(k)?'locked':''}" data-act="tab" data-v="${k}">${l}</button>`;
+  $('#nav').innerHTML=`<span class="navgrp">Workshop</span>`+TABS.filter(t=>!LOCKED_TABS.includes(t[0])).map(b).join('')+`<span class="navsep"></span><span class="navgrp">Admin</span>`+TABS.filter(t=>LOCKED_TABS.includes(t[0])).map(b).join('').replace('>Settings<','>Settings'+(isOwner()&&PROFILES.some(p=>p.role==='pending')?' <span class="pill p-warn">!</span>':'')+'<');
+  $('#qPerson').style.display=UI.locked?'none':'';
+  $('#coName').textContent=S.settings.company;
+  $('#lockBtn').textContent=UI.locked?'🔒':'🔓';
+}
+function render(){
+  renderNav();
+  const app=$('#app');
+  if(UI.locked&&LOCKED_TABS.includes(UI.tab)){app.innerHTML=`<div class="lockscreen panel"><div style="font-size:42px">🔒</div><h1>Manager area locked</h1><p class="muted">Unlock with the padlock button at the top right.</p></div>`;return}
+  ({today:vToday,register:vRegister,jobs:vJobs,people:vPeople,reports:vReports,pay:vPay,settings:vSettings})[UI.tab](app);
+}
+
+/* ---------- TODAY ---------- */
+function statusOf(e,d){
+  const c=S.clocks[e.id];
+  const note=S.notes[e.id+'|'+d];
+  const h=cellHours(e.id,d);
+  if(c)return{k:'in',c,h,note};
+  if(note&&CODES[note.c]?.off)return{k:'abs',h,note};
+  if(h>0)return{k:'done',h,note};
+  return{k:'out',h,note};
+}
+function vToday(app){
+  const d=todayISO(),emps=activeEmps();
+  const st=emps.map(e=>({e,s:statusOf(e,d)}));
+  const nIn=st.filter(x=>x.s.k==='in').length,nAbs=st.filter(x=>x.s.k==='abs').length,nDone=st.filter(x=>x.s.k==='done').length;
+  const stale=Object.entries(S.clocks).filter(([e,c])=>c.d!==d);
+  app.innerHTML=`
+  <div class="hero">
+    <div><div class="muted">${fmtDL(d)} · Pay week ${weekNo(weekStart(d))}</div><div class="clock" id="bigClock">--:--</div></div>
+    <div class="sp"></div>
+    <div class="row">
+      <button class="btn" data-act="stdday">⚡ Standard day for everyone unmarked</button>
+      <button class="btn pri" data-act="go" data-v="register">Open week register →</button>
+    </div>
+  </div>
+  ${stale.length?`<div class="banner sec">⚠ ${stale.map(([e,c])=>esc(nm(emp(e)))+' (since '+fmtD(c.d)+' '+c.t+')').join(', ')} never clocked out. Tap their tile to close the shift at ${S.settings.dayEnd}.</div>`:''}
+  <div class="kpis">
+    <div class="kpi"><span>On site now</span><b style="color:var(--ok)">${nIn}</b></div>
+    <div class="kpi"><span>Finished / logged</span><b>${nDone}</b></div>
+    <div class="kpi"><span>Absent</span><b style="color:var(--bad)">${nAbs}</b></div>
+    <div class="kpi"><span>Not yet in</span><b>${emps.length-nIn-nAbs-nDone}</b></div>
+    <div class="kpi"><span>Hours logged today</span><b id="todayHrs">${h2(st.reduce((a,x)=>a+x.s.h,0))}</b></div>
+  </div>
+  <div class="tiles">${st.map(({e,s})=>tileHTML(e,s)).join('')||'<div class="empty">No active people. Add them under People.</div>'}</div>
+  ${todayJobsHTML(d)}`;
+  tick();
+}
+function tileHTML(e,s){
+  let mid='',pill='';
+  if(s.k==='in'){const j=job(s.c.j);pill='<span class="pill p-in">On site</span>';mid=`<span class="jobchip"><span class="dot" style="background:${j.color}"></span>${esc(j.code)} · ${esc(j.name)}</span><div class="timer" data-since="${s.c.d} ${s.c.t}" data-base="${s.h}">0h 00m</div>`}
+  else if(s.k==='abs'){pill=`<span class="pill p-abs">${esc(CODES[s.note.c].l)}</span>`;mid=`<small class="muted">${esc(s.note.t||'')}</small>`}
+  else if(s.k==='done'){pill='<span class="pill p-done">Logged</span>';mid=jobsMini(e.id,todayISO())}
+  else{pill='<span class="pill p-out">Not in</span>';mid='<small class="muted">Tap to clock in</small>'}
+  const late=s.note&&!CODES[s.note.c]?.off?`<span class="pill p-warn">${esc(CODES[s.note.c]?.l||'')}</span>`:'';
+  return `<div class="tile ${s.k}" data-act="tile" data-v="${e.id}">
+    <div class="who">${avatar(e)}<div><b>${esc(nm(e))}</b><small>${esc(e.role||'')}</small></div></div>
+    ${mid}
+    <div class="foot"><span>${pill} ${late}</span><span class="mono">${s.h?h2(s.h)+' h':''}</span></div></div>`;
+}
+function jobsMini(e,d){
+  const by={};for(const x of cellEntries(e,d))by[x.j]=(by[x.j]||0)+ +x.h;
+  return Object.entries(by).map(([j,h])=>`<span class="jobchip"><span class="dot" style="background:${job(j).color}"></span>${esc(job(j).code)} ${h2(h)}h</span>`).join(' ');
+}
+function todayJobsHTML(d){
+  const by={};
+  for(const e of S.emps)for(const x of cellEntries(e.id,d))by[x.j]=(by[x.j]||0)+ +x.h;
+  for(const [e,c] of Object.entries(S.clocks))if(c.d===d){by[c.j]=(by[c.j]||0)+workedMinutes(d,c.t,nowHM())/60}
+  const arr=Object.entries(by).sort((a,b)=>b[1]-a[1]);if(!arr.length)return'';
+  const max=Math.max(...arr.map(a=>a[1]));
+  return `<div class="panel sec"><h2>Where the hours are going today</h2>${arr.map(([j,h])=>`<div class="hbar"><div class="lbl">${esc(job(j).code)} · ${esc(job(j).name)}</div><div class="t"><i style="width:${h/max*100}%;background:${job(j).color}"></i></div><div class="num mono">${h2(h)} h</div></div>`).join('')}</div>`;
+}
+function tick(){
+  const n=new Date();const c=$('#bigClock');if(c)c.textContent=pad(n.getHours())+':'+pad(n.getMinutes())+':'+pad(n.getSeconds());
+  document.querySelectorAll('[data-since]').forEach(el=>{
+    const[d,t]=el.dataset.since.split(' ');
+    const mins=d===todayISO()?workedMinutes(d,t,nowHM())+(n.getSeconds()/60):0;
+    el.textContent=hm(mins);
+  });
+}
+setInterval(()=>{if(UI.tab==='today')tick()},1000);
+
+function tileModal(eid){
+  const e=emp(eid),d=todayISO(),c=S.clocks[eid];
+  const ents=cellEntries(eid,d);
+  const note=S.notes[eid+'|'+d];
+  const stale=c&&c.d!==d;
+  let body='';
+  if(c){
+    const j=job(c.j);
+    body=`<div class="panel" style="margin-bottom:14px"><div class="row"><span class="jobchip"><span class="dot" style="background:${j.color}"></span>${esc(j.code)} · ${esc(j.name)}</span><span class="sp"></span><span class="muted">since ${stale?fmtD(c.d)+' ':''}${c.t}</span></div></div>
+    ${stale?`<div class="banner">This shift started on ${fmtDL(c.d)}. Clocking out will end it at <b>${S.settings.dayEnd}</b> that day (edit afterwards in the register if needed).</div>`:''}
+    <div class="row" style="margin-bottom:14px"><button class="btn bad" data-act="cout" data-v="${eid}">⏹ Clock out</button><span class="muted">or switch to another job:</span></div>
+    ${jobPicker('switch',eid)}`;
+  }else{
+    body=`<div class="muted" style="margin-bottom:8px">Pick the job to clock in on:</div>${jobPicker('cin',eid)}
+    <hr><div class="muted" style="margin-bottom:8px">Not working today?</div>
+    <div class="row">${Object.entries(CODES).filter(([k,v])=>v.off).map(([k,v])=>`<button class="btn sm" data-act="mark" data-v="${eid}" data-c="${k}" style="border-color:${v.c}">${v.l}</button>`).join('')}
+    ${note?`<button class="btn sm ghost" data-act="unmark" data-v="${eid}">Clear mark</button>`:''}</div>`;
+  }
+  body+=`<hr><div class="row"><b>Today's log</b><span class="sp"></span><button class="btn sm" data-act="cell" data-e="${eid}" data-d="${d}">Edit hours manually</button></div>
+  ${ents.length?`<table style="margin-top:8px"><tbody>${ents.map(x=>`<tr><td><span class="dot" style="background:${job(x.j).color}"></span> ${esc(job(x.j).code)} · ${esc(job(x.j).name)}</td><td class="muted">${x.a?x.a+'–'+x.b:'manual'}</td><td class="num">${h2(x.h)} h</td></tr>`).join('')}</tbody></table>`:'<div class="muted" style="margin-top:8px">Nothing logged yet.</div>'}
+  ${note?`<div style="margin-top:10px"><span class="pill" style="background:var(--panel2);color:${CODES[note.c]?.c}">${esc(CODES[note.c]?.l)}</span> <span class="muted">${esc(note.t||'')}</span></div>`:''}`;
+  modal(`<div class="mhead">${avatar(e)}<div><h2>${esc(nm(e))}</h2><div class="muted">${esc(e.name)} · ${esc(e.role||'')}</div></div><button class="x" data-act="close">×</button></div>${body}`);
+}
+function jobPicker(mode,eid){
+  const cur=S.clocks[eid]?.j;
+  const js=openJobs().filter(j=>j.id!==cur);
+  return `<input type="text" placeholder="Search jobs…" style="width:100%;margin-bottom:8px" data-filter="jp">
+  <div class="jobpick" id="jp">${js.map(j=>`<button class="jobbtn" data-act="${mode}" data-v="${eid}" data-j="${j.id}" data-s="${esc((j.code+' '+j.name+' '+j.client).toLowerCase())}"><span class="dot" style="background:${j.color};margin-top:4px"></span><span><b>${esc(j.code)} · ${esc(j.name)}</b><small>${esc(j.client||'')}</small></span></button>`).join('')||'<div class="muted">No open jobs – add one under Jobs.</div>'}</div>`;
+}
+
+/* ---------- REGISTER ---------- */
+function vRegister(app){
+  const ws=UI.week,days=weekDays(ws),we=days[6],t=todayISO();
+  const emps=empsForRange(ws,we).filter(e=>!(e.end&&e.end<ws)||days.some(d=>cellEntries(e.id,d).length));
+  let tot=0,totW=0;const dayT=days.map(()=>0);
+  const rows=emps.map(e=>{
+    let eh=0,ew=0;
+    const tds=days.map((d,i)=>{
+      const ents=cellEntries(e.id,d),h=ents.reduce((a,x)=>a+ +x.h,0),note=S.notes[e.id+'|'+d];
+      eh+=h;ew+=ents.reduce((a,x)=>a+x.h*(x.r??e.rate),0);dayT[i]+=h;
+      const by={};ents.forEach(x=>by[x.j]=(by[x.j]||0)+ +x.h);
+      const bars=h?`<div class="bars">${Object.entries(by).map(([j,v])=>`<i style="width:${v/h*100}%;background:${job(j).color}" title="${esc(job(j).code)} ${h2(v)}h"></i>`).join('')}</div>`:'';
+      const off=note&&CODES[note.c]?.off;
+      const tag=note?`<span class="tag" data-act="cell" data-e="${e.id}" data-d="${d}" style="color:${CODES[note.c]?.c||'var(--muted)'};background:var(--panel2)" title="${esc(note.t||'')}">${esc((CODES[note.c]?.l||'note').split(' ')[0])}</span>`:'';
+      const advs=S.adv.filter(a=>a.e===e.id&&a.d===d);
+      const advTag=advs.length&&money_on()?`<span class="tag" style="color:var(--acc);background:var(--panel2)" title="Advance">${money(advs.reduce((a,x)=>a+x.amt,0)).replace(/\.00$/,'')}</span>`:'';
+      return `<td class="c ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''} ${off&&!h?'c-absent':''}"><div class="cell ${h?'has':''}"><input inputmode="decimal" value="${h?h2(h):''}" placeholder="${off?'–':'·'}" data-cell="${e.id}|${d}" ${Object.keys(by).length>1?'title="Split over several jobs – click ⋯ to edit"':''}>${bars}${tag}${advTag}</div><button class="more" data-act="cell" data-e="${e.id}" data-d="${d}" title="Details / jobs / notes">⋯</button></td>`;
+    }).join('');
+    tot+=eh;totW+=ew;
+    return `<tr><td><div class="namecell">${avatar(e)}<div><b>${esc(nm(e))}</b>${!e.active?' <span class="pill p-out">inactive</span>':''}</div></div></td>${tds}<td class="num"><b>${h2(eh)}</b></td>${money_on()?`<td class="num">${money(e.rate)}</td><td class="num"><b>${money(ew)}</b></td>`:''}</tr>`;
+  }).join('');
+  app.innerHTML=`
+  <div class="row"><div><h1>Week ${weekNo(ws)} · ${ws.slice(0,4)}</h1><div class="muted">${fmtDL(ws)} → ${fmtDL(we)} (pay week runs Friday to Thursday)</div></div><span class="sp"></span>
+  <button class="btn icon" data-act="wk" data-v="-1">←</button><button class="btn" data-act="wk" data-v="0">This week</button><button class="btn icon" data-act="wk" data-v="1">→</button>
+  <input type="date" value="${ws}" data-act="wkpick"></div>
+  <div class="row sec" style="margin-top:14px">
+   <span class="muted">Type hours straight into a cell (goes to the default job), or click ⋯ to split over jobs, add notes, absences or advances.</span><span class="sp"></span>
+   <button class="btn" data-act="fillweek">⚡ Fill standard hours (empty cells)</button>
+   <button class="btn" data-act="csvweek">⬇ CSV</button>
+   <button class="btn" data-act="printweek">🖨 Print</button>
+  </div>
+  <div class="tablewrap sec reg" style="margin-top:12px"><table>
+   <thead><tr><th>Person</th>${days.map(d=>`<th class="num ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''}" style="text-align:center">${DOW[dow(d)]}<br><span style="font-weight:500">${fmtD(d)}</span></th>`).join('')}<th class="num">Hours</th>${money_on()?'<th class="num">Rate</th><th class="num">Wages</th>':''}</tr></thead>
+   <tbody>${rows||`<tr><td colspan="12" class="empty">No one on the register this week.</td></tr>`}</tbody>
+   <tfoot><tr><th>Total</th>${dayT.map(h=>`<th class="num" style="text-align:center">${h?h2(h):''}</th>`).join('')}<th class="num">${h2(tot)}</th>${money_on()?`<th></th><th class="num">${money(totW)}</th>`:''}</tr></tfoot>
+  </table></div>
+  <div class="panel sec">${weekJobSummary(days)}</div>`;
+}
+function weekJobSummary(days){
+  const by={};for(const en of S.entries)if(en.d>=days[0]&&en.d<=days[6])by[en.j]=(by[en.j]||0)+ +en.h;
+  const arr=Object.entries(by).sort((a,b)=>b[1]-a[1]);if(!arr.length)return '<div class="muted">No hours this week yet.</div>';
+  const max=arr[0][1];
+  return `<h2>Hours per job this week</h2>`+arr.map(([j,h])=>`<div class="hbar"><div class="lbl">${esc(job(j).code)} · ${esc(job(j).name)}</div><div class="t"><i style="width:${h/max*100}%;background:${job(j).color}"></i></div><div class="mono" style="text-align:right">${h2(h)} h</div></div>`).join('');
+}
+function setCellHours(e,d,val){
+  const ents=cellEntries(e,d);
+  const h=parseFloat(String(val).replace(',','.'));
+  if(val===''||isNaN(h)||h===0){S.entries=S.entries.filter(x=>!(x.e===e&&x.d===d));save();return true}
+  const jobs=new Set(ents.map(x=>x.j));
+  if(jobs.size>1)return false;
+  const j=ents[0]?.j||S.settings.defJob;
+  S.entries=S.entries.filter(x=>!(x.e===e&&x.d===d));
+  S.entries.push({id:uid(),e,d,j,h,r:ents[0]?.r??emp(e).rate,src:'manual'});
+  const k=e+'|'+d;if(S.notes[k]&&CODES[S.notes[k].c]?.off)delete S.notes[k];
+  save();return true;
+}
+function cellModal(e,d){
+  const E=emp(e),ents=cellEntries(e,d),note=S.notes[e+'|'+d]||{c:'',t:''};
+  const advs=S.adv.filter(a=>a.e===e&&a.d===d);
+  const jobOpts=sel=>S.jobs.filter(j=>j.status==='active'||j.id===sel).map(j=>`<option value="${j.id}" ${j.id===sel?'selected':''}>${esc(j.code)} · ${esc(j.name)}</option>`).join('');
+  const line=x=>`<div class="ln"><select data-l="j">${jobOpts(x.j)}</select><input type="number" step="0.25" min="0" data-l="h" value="${x.h}" placeholder="hrs"><button class="btn icon ghost" data-act="rmline">✕</button></div>`;
+  modal(`<div class="mhead">${avatar(E)}<div><h2>${esc(nm(E))}</h2><div class="muted">${fmtDL(d)}</div></div><button class="x" data-act="close">×</button></div>
+   <div class="row" style="margin-bottom:8px"><b>Hours per job</b><span class="sp"></span><span class="muted" id="lnTot"></span></div>
+   <div class="lines" id="lines">${(ents.length?ents:[{j:S.settings.defJob,h:''}]).map(line).join('')}</div>
+   <div class="row"><button class="btn sm" data-act="addline">+ Add job line</button><button class="btn sm ghost" data-act="stdline">Standard (${S.settings.std[dow(d)]||0} h)</button></div>
+   ${ents.some(x=>x.a)?`<div class="muted" style="margin-top:6px;font-size:12px">Clock times: ${ents.filter(x=>x.a).map(x=>x.a+'–'+x.b).join(', ')}</div>`:''}
+   <hr>
+   <div class="grid2"><label class="f">Mark / reason<select id="nc"><option value="">— none —</option>${Object.entries(CODES).map(([k,v])=>`<option value="${k}" ${note.c===k?'selected':''}>${v.l}</option>`).join('')}</select></label>
+   <label class="f">Note<input type="text" id="nt" value="${esc(note.t)}" placeholder="e.g. Came in 9:00, taxi problems"></label></div>
+   ${money_on()?`<hr><div class="grid2"><label class="f">Advance / loan paid today (${esc(S.settings.cur)})<input type="number" id="adv" min="0" step="10" value="${advs.reduce((a,x)=>a+x.amt,0)||''}" placeholder="0"></label><div class="muted" style="font-size:12px;align-self:end">Advances are deducted automatically on that week's payslip.</div></div>`:''}
+   <div class="row" style="margin-top:18px"><button class="btn bad" data-act="clearcell">Clear day</button><span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="savecell">Save</button></div>`,
+   m=>{m.dataset.e=e;m.dataset.d=d;m._line=line;updLnTot(m)});
+}
+function updLnTot(m){const t=[...m.querySelectorAll('[data-l=h]')].reduce((a,i)=>a+(+i.value||0),0);const el=m.querySelector('#lnTot');if(el)el.textContent='Total '+h2(t)+' h'}
+
+/* ---------- JOBS ---------- */
+function jobStats(){
+  const st={};for(const j of S.jobs)st[j.id]={h:0,cost:0,people:new Set(),last:''};
+  for(const en of S.entries){const s=st[en.j];if(!s)continue;s.h+= +en.h;s.cost+=en.h*(en.r??emp(en.e).rate);s.people.add(en.e);if(en.d>s.last)s.last=en.d}
+  for(const [e,c] of Object.entries(S.clocks)){const s=st[c.j];if(s&&c.d===todayISO()){s.live=(s.live||0)+1}}
+  return st;
+}
+function vJobs(app){
+  const st=jobStats(),q=UI.jobQ.toLowerCase();
+  const js=S.jobs.filter(j=>(UI.jobFilter==='all'||j.status===UI.jobFilter)&&(!q||(j.code+' '+j.name+' '+j.client).toLowerCase().includes(q)))
+    .sort((a,b)=>(st[b.id].last||'').localeCompare(st[a.id].last||'')||b.code.localeCompare(a.code));
+  app.innerHTML=`<div class="row"><div><h1>Jobs</h1><div class="muted">Every hour booked is costed to a job. Set quoted hours to see progress.</div></div><span class="sp"></span>
+   <input type="text" placeholder="Search…" value="${esc(UI.jobQ)}" data-act="jobq">
+   <div class="seg">${[['active','Open'],['done','Closed'],['all','All']].map(([k,l])=>`<button class="${UI.jobFilter===k?'on':''}" data-act="jobf" data-v="${k}">${l}</button>`).join('')}</div>
+   <button class="btn pri" data-act="newjob">+ New job</button></div>
+   <div class="cards sec">${js.map(j=>{const s=st[j.id],pct=j.quote?s.h/j.quote*100:0,over=pct>100;
+    return `<div class="card" data-act="job" data-v="${j.id}"><div class="stripe" style="background:${j.color}"></div>
+    <div class="row"><span class="code">${esc(j.code)}</span>${s.live?`<span class="pill p-in">${s.live} on it now</span>`:''}<span class="sp"></span><span class="pill ${j.status==='active'?'p-in':'p-out'}">${j.status==='active'?'open':'closed'}</span></div>
+    <div style="font-weight:700;font-size:16px;margin:6px 0 2px">${esc(j.name)}</div><div class="muted">${esc(j.client||'—')}</div>
+    ${j.quote?`<div class="prog"><i style="width:${Math.min(100,pct)}%;background:${over?'var(--bad)':j.color}"></i></div><div class="row" style="font-size:12px"><span>${h2(s.h)} / ${j.quote} h</span><span class="sp"></span><span style="color:${over?'var(--bad)':'var(--muted)'}">${Math.round(pct)}%${over?' · over budget':''}</span></div>`:`<div style="margin-top:12px;font-size:12px" class="muted">${h2(s.h)} h booked · no quote set</div>`}
+    <div class="row" style="margin-top:10px;font-size:12px" class="muted"><span class="muted">${s.people.size} people</span><span class="sp"></span>${money_on()?`<span class="money">${money(s.cost)}</span>`:''}</div></div>`}).join('')||'<div class="empty">No jobs here.</div>'}</div>`;
+}
+function jobModal(id){
+  const j=id?job(id):{id:'',code:nextCode(),name:'',client:'',quote:'',status:'active',color:PALETTE[S.jobs.length%PALETTE.length],notes:''};
+  let stats='';
+  if(id){
+    const ents=S.entries.filter(x=>x.j===id);
+    const byP={};ents.forEach(x=>{byP[x.e]=byP[x.e]||{h:0,c:0};byP[x.e].h+= +x.h;byP[x.e].c+=x.h*(x.r??emp(x.e).rate)});
+    const tot=ents.reduce((a,x)=>a+ +x.h,0),cost=ents.reduce((a,x)=>a+x.h*(x.r??emp(x.e).rate),0);
+    const byW={};ents.forEach(x=>{const w=weekStart(x.d);byW[w]=(byW[w]||0)+ +x.h});
+    const wks=Object.keys(byW).sort().slice(-16),mx=Math.max(1,...wks.map(w=>byW[w]));
+    const dates=ents.map(x=>x.d).sort();
+    stats=`<div class="kpis" style="margin-top:0"><div class="kpi"><span>Hours</span><b>${h2(tot)}</b></div>${money_on()?`<div class="kpi"><span>Labour cost</span><b style="font-size:20px">${money(cost)}</b></div>`:''}<div class="kpi"><span>Quote left</span><b style="color:${j.quote&&tot>j.quote?'var(--bad)':'inherit'}">${j.quote?h2(j.quote-tot):'—'}</b></div><div class="kpi"><span>Period</span><b style="font-size:14px">${dates.length?fmtD(dates[0])+' – '+fmtD(dates.at(-1)):'—'}</b></div></div>
+    ${wks.length?`<div class="muted" style="font-size:12px">Hours per week</div><div class="cols" style="height:90px">${wks.map(w=>`<div title="Wk ${weekNo(w)}: ${h2(byW[w])} h" style="height:${byW[w]/mx*100}%;background:${j.color}"></div>`).join('')}</div>`:''}
+    <table style="margin:14px 0"><thead><tr><th>Person</th><th class="num">Hours</th>${money_on()?'<th class="num">Cost</th>':''}</tr></thead><tbody>${Object.entries(byP).sort((a,b)=>b[1].h-a[1].h).map(([e,v])=>`<tr><td>${esc(nm(emp(e)))}</td><td class="num">${h2(v.h)}</td>${money_on()?`<td class="num">${money(v.c)}</td>`:''}</tr>`).join('')||'<tr><td colspan=3 class="muted">No hours yet.</td></tr>'}</tbody></table><hr>`;
+  }
+  modal(`<div class="mhead"><span class="dot" style="background:${j.color};width:14px;height:14px"></span><h2>${id?esc(j.code+' · '+j.name):'New job'}</h2><button class="x" data-act="close">×</button></div>
+  ${stats}
+  <div class="grid3"><label class="f">Job number<input type="text" id="jc" value="${esc(j.code)}"></label><label class="f" style="grid-column:span 2">Job name<input type="text" id="jn" value="${esc(j.name)}" placeholder="e.g. Steel carport – Smith"></label></div>
+  <div class="grid3" style="margin-top:12px"><label class="f">Client<input type="text" id="jcl" value="${esc(j.client)}"></label><label class="f">Quoted hours<input type="number" id="jq" value="${j.quote||''}" min="0"></label><label class="f">Colour<input type="color" id="jcol" value="${j.color}" style="height:38px;padding:2px;background:var(--panel2);border:1px solid var(--line);border-radius:8px"></label></div>
+  <label class="f" style="margin-top:12px">Notes<textarea id="jno" rows="2">${esc(j.notes||'')}</textarea></label>
+  <div class="row" style="margin-top:18px">${id?`<button class="btn ${j.status==='active'?'':'ok'}" data-act="togglejob" data-v="${id}">${j.status==='active'?'✓ Close job':'Re-open job'}</button>`:''}${id&&!S.entries.some(x=>x.j===id)?`<button class="btn bad" data-act="deljob" data-v="${id}">Delete</button>`:''}<span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="savejob" data-v="${id}">Save</button></div>`,null,id?'wide':'');
+}
+function nextCode(){const n=S.jobs.map(j=>parseInt(String(j.code).replace(/\D/g,''))||0);return 'J'+String(Math.max(100,...n)+1).padStart(3,'0')}
+
+/* ---------- PEOPLE ---------- */
+function vPeople(app){
+  const list=S.emps.filter(e=>UI.peopleFilter==='all'||(UI.peopleFilter==='active'?e.active:!e.active)).sort((a,b)=>(b.active-a.active)||a.no-b.no);
+  const since=addDays(todayISO(),-84);
+  app.innerHTML=`<div class="row"><div><h1>People</h1><div class="muted">Bank &amp; ID details are deliberately not stored here – keep those in your HR file.</div></div><span class="sp"></span>
+  <div class="seg">${[['active','Active'],['inactive','Past'],['all','All']].map(([k,l])=>`<button class="${UI.peopleFilter===k?'on':''}" data-act="pf" data-v="${k}">${l}</button>`).join('')}</div>
+  <button class="btn pri" data-act="newemp">+ Add person</button></div>
+  <div class="tablewrap sec"><table><thead><tr><th>#</th><th>Person</th><th>Role</th><th>Type</th><th class="num">Rate / h</th><th>Started</th><th class="num">Hrs (12 wk)</th><th class="num">Attendance</th><th>Status</th></tr></thead><tbody>
+  ${list.map(e=>{const a=attStats(e.id,since,todayISO());return `<tr style="cursor:pointer" data-act="emp" data-v="${e.id}"><td class="mono muted">${e.no??''}</td><td><div class="namecell">${avatar(e)}<div><b>${esc(nm(e))}</b><div class="muted" style="font-size:12px">${esc(e.name)}</div></div></div></td><td>${esc(e.role||'')}</td><td>${esc(e.type||'')}</td><td class="num">${money(e.rate)}</td><td>${e.start?fmtD(e.start)+' '+e.start.slice(0,4):'—'}</td><td class="num">${h2(a.h)}</td><td class="num">${a.sched?Math.round(a.present/a.sched*100)+'%':'—'}</td><td>${e.active?'<span class="pill p-in">active</span>':`<span class="pill p-out">left ${e.end?fmtD(e.end)+' '+e.end.slice(0,4):''}</span>`}</td></tr>`}).join('')}
+  </tbody></table></div>`;
+}
+function attStats(e,a,b){
+  let h=0,present=0,sched=0,absent=0,late=0,wage=0;const E=emp(e);
+  for(let d=a;d<=b;d=addDays(d,1)){
+    if(E.start&&d<E.start)continue;if(E.end&&d>E.end)break;
+    const hh=cellHours(e,d),n=S.notes[e+'|'+d];
+    const isWork=(+S.settings.std[dow(d)]||0)>0&&!(n&&n.c==='holiday');
+    if(isWork)sched++;
+    if(hh>0){present++;h+=hh;wage+=cellEntries(e,d).reduce((x,y)=>x+y.h*(y.r??E.rate),0)}
+    if(n&&CODES[n.c]?.off&&n.c!=='holiday'&&n.c!=='rain')absent++;
+    if(n&&(n.c==='late'||n.c==='early'))late++;
+  }
+  if(present>sched)present=sched;
+  return{h,present,sched,absent,late,wage};
+}
+function empModal(id){
+  const e=id?emp(id):{id:'',no:Math.max(0,...S.emps.map(x=>x.no||0))+1,name:'',nick:'',role:'Algemene werker',type:'Casual',rate:35,start:todayISO(),end:'',endNote:'',active:true,color:PALETTE[S.emps.length%PALETTE.length]};
+  let extra='';
+  if(id){
+    const end=e.end&&e.end<todayISO()?e.end:todayISO();
+    const a=attStats(id,addDays(end,-181),end);
+    // heatmap 26 weeks
+    const ws0=weekStart(addDays(end,-175));let cells='';
+    for(let w=0;w<26;w++)for(let i=0;i<7;i++){const d=addDays(ws0,w*7+i);const h=cellHours(id,d),n=S.notes[id+'|'+d];
+      let c='var(--panel2)';if(h>0)c=`color-mix(in srgb,var(--ok) ${Math.min(100,25+h*9)}%,var(--panel2))`;if(n&&CODES[n.c]?.off)c=CODES[n.c].c;if(d>todayISO())c='transparent';
+      cells+=`<i style="background:${c}" title="${fmtDL(d)}: ${h?h2(h)+' h':''} ${n?esc(CODES[n.c]?.l+' '+(n.t||'')):''}"></i>`}
+    const byJ={};S.entries.filter(x=>x.e===id&&x.d>=addDays(end,-181)).forEach(x=>byJ[x.j]=(byJ[x.j]||0)+ +x.h);
+    const advs=S.adv.filter(x=>x.e===id).sort((a,b)=>b.d.localeCompare(a.d)).slice(0,8);
+    extra=`<div class="kpis" style="margin-top:0"><div class="kpi"><span>Hours (6 mo)</span><b>${h2(a.h)}</b></div><div class="kpi"><span>Attendance</span><b>${a.sched?Math.round(a.present/a.sched*100)+'%':'—'}</b></div><div class="kpi"><span>Absent days</span><b style="color:var(--bad)">${a.absent}</b></div><div class="kpi"><span>Late / early</span><b style="color:var(--warn)">${a.late}</b></div></div>
+    <div class="muted" style="font-size:12px;margin-bottom:6px">Last 26 weeks (columns = pay weeks, Fri at top). Green = worked, colours = absences.</div>
+    <div style="overflow-x:auto"><div class="heat">${cells}</div></div>
+    <div class="grid2 sec"><div><b>Top jobs (6 mo)</b>${Object.entries(byJ).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([j,h])=>`<div class="row" style="margin-top:6px"><span class="dot" style="background:${job(j).color}"></span><span>${esc(job(j).code)} ${esc(job(j).name)}</span><span class="sp"></span><span class="mono">${h2(h)}</span></div>`).join('')||'<div class="muted">—</div>'}</div>
+    <div><b>Recent advances</b>${advs.map(x=>`<div class="row" style="margin-top:6px"><span>${fmtD(x.d)} ${x.d.slice(0,4)}</span><span class="muted" style="font-size:12px">${esc(x.note||'')}</span><span class="sp"></span><span class="mono">${money(x.amt)}</span></div>`).join('')||'<div class="muted">None</div>'}</div></div><hr>`;
+  }
+  modal(`<div class="mhead">${avatar(e)}<h2>${id?esc(e.name):'New person'}</h2><button class="x" data-act="close">×</button></div>${extra}
+  <div class="grid3"><label class="f">Emp. no<input type="number" id="pno" value="${e.no??''}"></label><label class="f">Full name<input type="text" id="pn" value="${esc(e.name)}"></label><label class="f">Called (nickname)<input type="text" id="pk" value="${esc(e.nick)}"></label></div>
+  <div class="grid3" style="margin-top:12px"><label class="f">Role<input type="text" id="pr" value="${esc(e.role)}" list="roles"></label><label class="f">Type<select id="pt">${['Casual','Permanent','Contract','Subcontractor'].map(t=>`<option ${e.type===t?'selected':''}>${t}</option>`).join('')}</select></label><label class="f">Hourly rate (${esc(S.settings.cur)})<input type="number" step="0.05" id="prt" value="${e.rate}"></label></div>
+  <datalist id="roles">${[...new Set(S.emps.map(x=>x.role).filter(Boolean))].map(r=>`<option value="${esc(r)}">`).join('')}</datalist>
+  <div class="grid3" style="margin-top:12px"><label class="f">Start date<input type="date" id="ps" value="${e.start||''}"></label><label class="f">End date<input type="date" id="pe" value="${e.end||''}"></label><label class="f">Colour<input type="color" id="pc" value="${e.color}" style="height:38px;padding:2px;background:var(--panel2);border:1px solid var(--line);border-radius:8px"></label></div>
+  <label class="f" style="margin-top:12px">Notes / reason for leaving<textarea id="pnote" rows="2">${esc(e.endNote||'')}</textarea></label>
+  <label class="row" style="margin-top:12px"><input type="checkbox" id="pa" ${e.active?'checked':''}> Active (shows on Today board and register)</label>
+  <div class="muted" style="font-size:12px;margin-top:8px">A rate change applies to new hours only – history keeps the rate that applied at the time.</div>
+  <div class="row" style="margin-top:18px">${id&&!S.entries.some(x=>x.e===id)?`<button class="btn bad" data-act="delemp" data-v="${id}">Delete</button>`:''}<span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="saveemp" data-v="${id}">Save</button></div>`,null,id?'wide':'');
+}
+
+/* ---------- REPORTS ---------- */
+function rangeOf(){
+  const t=todayISO(),ws=weekStart(t);
+  switch(UI.range){
+    case 'thisweek':return[ws,addDays(ws,6)];
+    case 'lastweek':return[addDays(ws,-7),addDays(ws,-1)];
+    case 'thismonth':return[t.slice(0,8)+'01',t];
+    case 'lastmonth':{const d=parse(t.slice(0,8)+'01');d.setUTCMonth(d.getUTCMonth()-1);const a=toISO(d);return[a,addDays(t.slice(0,8)+'01',-1)]}
+    case 'year':return[t.slice(0,4)+'-01-01',t];
+    case '12w':return[addDays(ws,-77),addDays(ws,6)];
+    default:return[UI.from||ws,UI.to||t];
+  }
+}
+function vReports(app){
+  const[a,b]=rangeOf();
+  const ents=S.entries.filter(x=>x.d>=a&&x.d<=b);
+  const tot=ents.reduce((s,x)=>s+ +x.h,0),cost=ents.reduce((s,x)=>s+x.h*(x.r??emp(x.e).rate),0);
+  const byJ={},byD={},byE={};
+  ents.forEach(x=>{byJ[x.j]=(byJ[x.j]||0)+ +x.h;byD[x.d]=(byD[x.d]||0)+ +x.h});
+  const people=empsForRange(a,b);
+  let sched=0,pres=0,abs=0,late=0;
+  const rows=people.map(e=>{const s=attStats(e.id,a,b<todayISO()?b:todayISO());sched+=s.sched;pres+=s.present;abs+=s.absent;late+=s.late;return{e,s}}).filter(r=>r.s.h||r.s.sched);
+  const ja=Object.entries(byJ).sort((x,y)=>y[1]-x[1]),jm=Math.max(1,...ja.map(x=>x[1]));
+  const days=[];for(let d=a;d<=b;d=addDays(d,1))days.push(d);
+  const dm=Math.max(1,...days.map(d=>byD[d]||0));
+  app.innerHTML=`<div class="row"><div><h1>Reports</h1><div class="muted">${fmtDL(a)} → ${fmtDL(b)}</div></div><span class="sp"></span>
+  <div class="seg">${[['thisweek','This week'],['lastweek','Last week'],['12w','12 weeks'],['thismonth','This month'],['lastmonth','Last month'],['year','Year'],['custom','Custom']].map(([k,l])=>`<button class="${UI.range===k?'on':''}" data-act="range" data-v="${k}">${l}</button>`).join('')}</div>
+  ${UI.range==='custom'?`<input type="date" value="${a}" data-act="from"><input type="date" value="${b}" data-act="to">`:''}
+  <button class="btn" data-act="csvrange">⬇ CSV</button></div>
+  <div class="kpis"><div class="kpi"><span>Hours worked</span><b>${h2(tot)}</b></div>${money_on()?`<div class="kpi"><span>Labour cost</span><b style="font-size:21px">${money(cost)}</b></div>`:''}<div class="kpi"><span>Attendance</span><b>${sched?Math.round(pres/sched*100)+'%':'—'}</b></div><div class="kpi"><span>Absent days</span><b style="color:var(--bad)">${abs}</b></div><div class="kpi"><span>Late / early</span><b style="color:var(--warn)">${late}</b></div><div class="kpi"><span>Jobs worked</span><b>${ja.length}</b></div></div>
+  <div class="grid2"><div class="panel"><h2>Hours by job</h2>${ja.map(([j,h])=>`<div class="hbar"><div class="lbl" title="${esc(job(j).name)}">${esc(job(j).code)} · ${esc(job(j).name)}</div><div class="t"><i style="width:${h/jm*100}%;background:${job(j).color}"></i></div><div class="mono" style="text-align:right">${h2(h)} h</div></div>`).join('')||'<div class="muted">No hours.</div>'}</div>
+  <div class="panel"><h2>Hours per day</h2><div class="cols">${days.map(d=>`<div title="${fmtDL(d)}: ${h2(byD[d]||0)} h" style="height:${(byD[d]||0)/dm*100}%;${dow(d)===5?'box-shadow:-2px 0 0 var(--line)':''}"></div>`).join('')}</div><div class="row muted" style="font-size:11px;margin-top:4px"><span>${fmtD(a)}</span><span class="sp"></span><span>${fmtD(b)}</span></div></div></div>
+  <div class="tablewrap sec"><table><thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Days worked</th><th class="num">Work days</th><th class="num">Attendance</th><th class="num">Absent</th><th class="num">Late/early</th>${money_on()?'<th class="num">Wages</th>':''}</tr></thead><tbody>
+  ${rows.sort((x,y)=>y.s.h-x.s.h).map(({e,s})=>`<tr data-act="emp" data-v="${e.id}" style="cursor:pointer"><td><div class="namecell">${avatar(e)}<b>${esc(nm(e))}</b></div></td><td class="num">${h2(s.h)}</td><td class="num">${s.present}</td><td class="num">${s.sched}</td><td class="num" style="color:${s.sched&&s.present/s.sched<.85?'var(--bad)':'inherit'}">${s.sched?Math.round(s.present/s.sched*100)+'%':'—'}</td><td class="num">${s.absent||''}</td><td class="num">${s.late||''}</td>${money_on()?`<td class="num">${money(s.wage)}</td>`:''}</tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+/* ---------- PAYSLIPS ---------- */
+function payRows(ws){
+  const days=weekDays(ws),we=days[6];
+  return empsForRange(ws,we).map(e=>{
+    const ents=S.entries.filter(x=>x.e===e.id&&x.d>=ws&&x.d<=we);
+    const h=ents.reduce((a,x)=>a+ +x.h,0);
+    const byR={};ents.forEach(x=>{const r=x.r??e.rate;byR[r]=(byR[r]||0)+ +x.h});
+    const gross=ents.reduce((a,x)=>a+x.h*(x.r??e.rate),0);
+    const adv=S.adv.filter(x=>x.e===e.id&&x.d>=ws&&x.d<=we);
+    const advT=adv.reduce((a,x)=>a+x.amt,0);
+    const ded=S.deds[e.id+'|'+ws]||{amt:0,label:''};
+    return{e,h,byR,gross,adv,advT,ded,net:gross-advT-(+ded.amt||0),days:new Set(ents.map(x=>x.d)).size};
+  }).filter(r=>r.h>0||r.advT>0);
+}
+function vPay(app){
+  const ws=UI.payWeek,we=addDays(ws,6),rows=payRows(ws);
+  const T=k=>rows.reduce((a,r)=>a+r[k],0);
+  app.innerHTML=`<div class="row"><div><h1>Payslips · Week ${weekNo(ws)}</h1><div class="muted">${fmtDL(ws)} → ${fmtDL(we)}</div></div><span class="sp"></span>
+  <button class="btn icon" data-act="pw" data-v="-1">←</button><button class="btn" data-act="pw" data-v="0">This week</button><button class="btn icon" data-act="pw" data-v="1">→</button>
+  <button class="btn pri" data-act="printall">🖨 Print all payslips</button></div>
+  <div class="kpis"><div class="kpi"><span>People paid</span><b>${rows.length}</b></div><div class="kpi"><span>Hours</span><b>${h2(T('h'))}</b></div><div class="kpi"><span>Gross</span><b style="font-size:21px">${money(T('gross'))}</b></div><div class="kpi"><span>Advances</span><b style="font-size:21px;color:var(--acc)">${money(T('advT'))}</b></div><div class="kpi"><span>Net to pay</span><b style="font-size:21px;color:var(--ok)">${money(T('net'))}</b></div></div>
+  <div class="tablewrap"><table><thead><tr><th>Person</th><th class="num">Days</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Gross</th><th class="num">Advances</th><th>Other deduction</th><th class="num">Net pay</th><th></th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td><div class="namecell">${avatar(r.e)}<div><b>${esc(nm(r.e))}</b><div class="muted" style="font-size:12px">#${r.e.no??''} ${esc(r.e.name)}</div></div></div></td><td class="num">${r.days}</td><td class="num">${h2(r.h)}</td><td class="num">${Object.keys(r.byR).map(x=>money(+x)).join(' / ')}</td><td class="num">${money(r.gross)}</td><td class="num" title="${esc(r.adv.map(a=>fmtD(a.d)+': '+a.note).join('\n'))}">${r.advT?money(r.advT):''}</td>
+  <td><div class="row" style="flex-wrap:nowrap;gap:6px"><input type="text" placeholder="label" value="${esc(r.ded.label)}" style="width:110px" data-ded="${r.e.id}|${ws}" data-k="label"><input type="number" placeholder="0" value="${r.ded.amt||''}" style="width:80px" data-ded="${r.e.id}|${ws}" data-k="amt"></div></td>
+  <td class="num"><b>${money(r.net)}</b></td><td><button class="btn sm" data-act="print1" data-v="${r.e.id}">🖨</button></td></tr>`).join('')||'<tr><td colspan=9 class="empty">No hours in this week.</td></tr>'}
+  </tbody></table></div>
+  <div class="muted sec" style="font-size:12px">Advances come from the week register (⋯ on a day). Payslip layout follows your Excel “Payslip” sheet; edit the company details under Settings.</div>`;
+}
+function slipHTML(r,ws){
+  const s=S.settings,we=addDays(ws,6);
+  const earn=Object.entries(r.byR).map(([rt,h])=>`<tr><td>${h2(h)}</td><td>${money(+rt)}</td><td style="text-align:right">${money(h*rt)}</td></tr>`).join('');
+  const deds=[...r.adv.map(a=>[`Advance ${fmtD(a.d)}`,a.amt]),...(+r.ded.amt?[[r.ded.label||'Deduction',+r.ded.amt]]:[])];
+  return `<div class="slip"><table style="width:100%;border:0"><tr><td style="border:0;vertical-align:top"><h3>${esc(s.company)}</h3>${esc(s.address).replace(/\n/g,'<br>')}</td><td style="border:0;text-align:right;vertical-align:top"><h3>PAYSLIP</h3>Week ${weekNo(ws)} · ${ws.slice(0,4)}<br>${fmtD(ws)} to ${fmtD(we)} ${we.slice(0,4)}</td></tr></table>
+  <table style="width:100%;margin-top:12px"><tr><th style="width:30%">Employee number</th><td>${r.e.no??''}</td><th style="width:20%">Pay date</th><td>${fmtDL(we)}</td></tr><tr><th>Employee name</th><td>${esc(r.e.name)}</td><th>Designation</th><td>${esc(r.e.role||'')}</td></tr><tr><th>Date of joining</th><td>${r.e.start||''}</td><th>Days worked</th><td>${r.days}</td></tr></table>
+  <table style="width:100%;margin-top:12px"><tr><th colspan=3>EARNINGS</th><th colspan=2>DEDUCTIONS</th></tr><tr><th>Hours</th><th>Amount / hour</th><th>Total</th><th>Description</th><th>Amount</th></tr>
+  ${(()=>{const e=Object.entries(r.byR),n=Math.max(e.length,deds.length,1);let o='';for(let i=0;i<n;i++){const a=e[i],d=deds[i];o+=`<tr><td>${a?h2(a[1]):''}</td><td>${a?money(+a[0]):''}</td><td style="text-align:right">${a?money(a[1]*a[0]):''}</td><td>${d?esc(d[0]):''}</td><td style="text-align:right">${d?money(d[1]):''}</td></tr>`}return o})()}
+  <tr><th colspan=2>Gross earnings</th><td style="text-align:right"><b>${money(r.gross)}</b></td><th>Total deductions</th><td style="text-align:right"><b>${money(r.advT+(+r.ded.amt||0))}</b></td></tr></table>
+  <table style="width:100%;margin-top:12px"><tr><td class="net">NET PAY</td><td class="net" style="text-align:right">${money(r.net)}</td></tr></table>
+  <div style="margin-top:28px;display:flex;justify-content:space-between"><span>Employee signature: ____________________</span><span>Employer: ____________________</span></div></div>`;
+}
+function doPrint(html){$('#print').innerHTML=html;setTimeout(()=>window.print(),50)}
+
+/* ---------- SETTINGS ---------- */
+function vSettings(app){
+  const s=S.settings;
+  app.innerHTML=`<h1>Settings</h1>
+  <div class="grid2 sec">
+   <div class="panel"><h2>Company (for payslips)</h2><label class="f">Company name<input type="text" data-set="company" value="${esc(s.company)}"></label><label class="f" style="margin-top:10px">Address<textarea rows="3" data-set="address">${esc(s.address)}</textarea></label><label class="f" style="margin-top:10px">Currency symbol<input type="text" data-set="cur" value="${esc(s.cur)}" style="width:80px"></label></div>
+   <div class="panel"><h2>Working day</h2><div class="grid2"><label class="f">Day starts<input type="time" data-set="dayStart" value="${s.dayStart}"></label><label class="f">Day ends<input type="time" data-set="dayEnd" value="${s.dayEnd}"></label><label class="f">Lunch from (not paid)<input type="time" data-set="lunchFrom" value="${s.lunchFrom}"></label><label class="f">Lunch to<input type="time" data-set="lunchTo" value="${s.lunchTo}"></label><label class="f">Round clock hours to (min)<select data-set="round">${[1,5,10,15,30].map(n=>`<option ${+s.round===n?'selected':''}>${n}</option>`).join('')}</select></label><label class="f">Late after (min grace)<input type="number" data-set="grace" value="${s.grace}"></label></div></div>
+   <div class="panel"><h2>Standard hours per day</h2><div class="muted" style="font-size:12px;margin-bottom:10px">Used by “Fill standard hours” and attendance %.</div><div class="grid3">${[5,6,0,1,2,3,4].map(i=>`<label class="f">${DOW[i]}<input type="number" step="0.5" data-std="${i}" value="${s.std[i]}"></label>`).join('')}</div>
+   <label class="f" style="margin-top:12px">Default job for typed-in hours<select data-set="defJob">${S.jobs.filter(j=>j.status==='active').map(j=>`<option value="${j.id}" ${s.defJob===j.id?'selected':''}>${esc(j.code)} · ${esc(j.name)}</option>`).join('')}</select></label></div>
+   <div class="panel"><h2>Manager lock</h2><div class="muted" style="font-size:12px;margin-bottom:10px">Set a PIN, then use the padlock (top right) to hide wages and lock People, Reports, Payslips and Settings – handy when the workshop tablet is used as a clock-in station.</div><label class="f">Manager PIN<input type="password" data-set="pin" value="${esc(s.pin)}" placeholder="none" inputmode="numeric"></label></div>
+  </div>
+  ${usersPanel()}
+  <div class="panel sec"><h2>Your data</h2>
+   <div class="muted" style="margin-bottom:12px">Saved online in your Supabase database and shared live with every approved user (${S.entries.length.toLocaleString()} time entries, ${S.emps.length} people, ${S.jobs.length} jobs). Download a backup now and then to keep your own copy.</div>
+   <div class="row">
+    <button class="btn pri" data-act="backup">⬇ Download backup (.json)</button>
+    <button class="btn" data-act="csvall">⬇ All entries (CSV / Excel)</button>
+    <span class="sp"></span>
+    ${isOwner()?'<label class="btn bad">⬆ Restore backup (replaces everything)<input type="file" accept=".json" data-act="restore" hidden></label>':''}
+   </div></div>`;
+}
+
+/* ---------- CSV ---------- */
+function dl(name,text,type='text/csv'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const csv=rows=>'﻿'+rows.map(r=>r.map(v=>{v=String(v??'');return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')).join('\r\n');
+function entriesCSV(a,b){
+  const rows=[['Date','Day','Pay week','Emp no','Name','Job no','Job','Client','Hours','Rate','Amount','Start','End','Mark','Note']];
+  S.entries.filter(x=>(!a||x.d>=a)&&(!b||x.d<=b)).sort((x,y)=>x.d.localeCompare(y.d)).forEach(x=>{const e=emp(x.e),j=job(x.j),n=S.notes[x.e+'|'+x.d];const r=x.r??e.rate;
+    rows.push([x.d,DOW[dow(x.d)],weekNo(weekStart(x.d)),e.no,e.name,j.code,j.name,j.client,x.h,r,(x.h*r).toFixed(2),x.a||'',x.b||'',n?CODES[n.c]?.l:'',n?.t||''])});
+  return csv(rows);
+}
+
+/* ---------- modal ---------- */
+function modal(html,onMount,cls=''){
+  closeModal();
+  const s=document.createElement('div');s.className='scrim';s.id='scrim';
+  s.innerHTML=`<div class="modal ${cls}">${html}</div>`;
+  s.addEventListener('mousedown',ev=>{if(ev.target===s)closeModal()});
+  document.body.appendChild(s);
+  const m=s.firstElementChild;onMount&&onMount(m);
+  const f=m.querySelector('input[type=text],input[type=number]');if(f&&!('ontouchstart' in window))f.focus();
+}
+function closeModal(){$('#scrim')?.remove();if(pendingRender){pendingRender=false;render()}}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+/* ---------- events ---------- */
+document.addEventListener('click',async ev=>{
+  const t=ev.target.closest('[data-act]');if(!t)return;
+  const a=t.dataset.act,v=t.dataset.v;
+  if(t.tagName==='INPUT'&&t.type!=='button')return;
+  switch(a){
+    case 'tab':UI.tab=v;render();break;
+    case 'go':UI.tab=v;render();break;
+    case 'theme':{let th='dark';try{th=localStorage.getItem('dagregister.theme')==='light'?'dark':'light';localStorage.setItem('dagregister.theme',th)}catch(e){}document.documentElement.dataset.theme=th;break}
+    case 'signout':await sb.auth.signOut();location.reload();break;
+    case 'blank':S=defaults();save();render();break;
+    case 'rmuser':if(confirm('Remove this user\'s access?')){const{error}=await sb.from('profiles').delete().eq('id',v);if(error)toast(error.message);await loadProfiles();render()}break;
+    case 'lock':
+      if(UI.locked){const p=S.settings.pin?prompt('Manager PIN'):'';if(S.settings.pin&&p!==S.settings.pin){toast('Wrong PIN');return}UI.locked=false}
+      else{if(!S.settings.pin&&!confirm('No PIN set yet – lock anyway? (Set a PIN under Settings)'))return;UI.locked=true;if(LOCKED_TABS.includes(UI.tab))UI.tab='today'}
+      render();break;
+    case 'close':closeModal();break;
+    case 'tile':tileModal(v);break;
+    case 'cin':clockIn(v,t.dataset.j);closeModal();render();toast(nm(emp(v))+' clocked in on '+job(t.dataset.j).code);break;
+    case 'switch':{const h=clockOut(v,nowHM());clockIn(v,t.dataset.j);closeModal();render();toast('Switched to '+job(t.dataset.j).code+(h?' · '+h2(h)+' h booked':''));break}
+    case 'cout':{const h=clockOut(v);closeModal();render();toast(nm(emp(v))+' clocked out · '+h2(h||0)+' h');break}
+    case 'mark':S.notes[v+'|'+todayISO()]={c:t.dataset.c,t:''};save();closeModal();render();break;
+    case 'unmark':delete S.notes[v+'|'+todayISO()];save();closeModal();render();break;
+    case 'stdday':{const d=todayISO(),h=+S.settings.std[dow(d)]||0;if(!h){toast('Standard hours for today is 0');return}
+      let n=0;for(const e of activeEmps()){if(cellEntries(e.id,d).length||S.clocks[e.id]||S.notes[e.id+'|'+d])continue;if(e.start&&e.start>d)continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
+      save();render();toast(n+' people given '+h+' h on '+job(S.settings.defJob).code);break}
+    case 'wk':UI.week=v==='0'?weekStart(todayISO()):addDays(UI.week,7*+v);render();break;
+    case 'cell':cellModal(t.dataset.e,t.dataset.d);break;
+    case 'addline':{const m=t.closest('.modal');m.querySelector('#lines').insertAdjacentHTML('beforeend',m._line({j:S.settings.defJob,h:''}));break}
+    case 'rmline':{const m=t.closest('.modal');t.closest('.ln').remove();updLnTot(m);break}
+    case 'stdline':{const m=t.closest('.modal');const ls=m.querySelectorAll('.ln');const h=S.settings.std[dow(m.dataset.d)]||0;if(ls.length===1)ls[0].querySelector('[data-l=h]').value=h;updLnTot(m);break}
+    case 'clearcell':{const m=t.closest('.modal'),e=m.dataset.e,d=m.dataset.d;S.entries=S.entries.filter(x=>!(x.e===e&&x.d===d));delete S.notes[e+'|'+d];S.adv=S.adv.filter(x=>!(x.e===e&&x.d===d));save();closeModal();render();break}
+    case 'savecell':{
+      const m=t.closest('.modal'),e=m.dataset.e,d=m.dataset.d,old=cellEntries(e,d);
+      const lines=[...m.querySelectorAll('.ln')].map(l=>({j:l.querySelector('[data-l=j]').value,h:parseFloat(l.querySelector('[data-l=h]').value)})).filter(l=>l.h>0);
+      S.entries=S.entries.filter(x=>!(x.e===e&&x.d===d));
+      lines.forEach((l,i)=>{const o=old.find(x=>x.j===l.j)||old[i];S.entries.push({id:uid(),e,d,j:l.j,h:l.h,r:o?.r??emp(e).rate,a:o&&o.j===l.j&&o.h===l.h?o.a:undefined,b:o&&o.j===l.j&&o.h===l.h?o.b:undefined,src:o?.src||'manual'})});
+      const c=m.querySelector('#nc').value,nt=m.querySelector('#nt').value.trim();
+      if(c||nt)S.notes[e+'|'+d]={c:c||'note',t:nt};else delete S.notes[e+'|'+d];
+      const av=m.querySelector('#adv');
+      if(av){const amt=+av.value||0;const ex=S.adv.filter(x=>x.e===e&&x.d===d);S.adv=S.adv.filter(x=>!(x.e===e&&x.d===d));if(amt)S.adv.push({id:uid(),e,d,amt,note:ex[0]?.note||'Advance'})}
+      save();closeModal();render();break}
+    case 'fillweek':{let n=0;const days=weekDays(UI.week);
+      for(const e of activeEmps())for(const d of days){const h=+S.settings.std[dow(d)]||0;if(!h)continue;if(e.start&&d<e.start)continue;if(e.end&&d>e.end)continue;if(cellEntries(e.id,d).length||S.notes[e.id+'|'+d])continue;if(d>todayISO())continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
+      save();render();toast(n+' days filled (up to today)');break}
+    case 'csvweek':{const ws=UI.week,days=weekDays(ws);const emps=empsForRange(ws,days[6]);
+      const rows=[['Emp no','Name',...days.map(d=>DOW[dow(d)]+' '+d),'Total hours','Rate','Wages']];
+      emps.forEach(e=>{let tw=0;const hs=days.map(d=>{const en=cellEntries(e.id,d);tw+=en.reduce((a,x)=>a+x.h*(x.r??e.rate),0);const h=en.reduce((a,x)=>a+ +x.h,0);const n=S.notes[e.id+'|'+d];return (h||'')+(n?' ('+(CODES[n.c]?.l||'')+(n.t?': '+n.t:'')+')':'')});
+        rows.push([e.no,e.name,...hs,days.reduce((a,d)=>a+cellHours(e.id,d),0),e.rate,tw.toFixed(2)])});
+      rows.push([]);rows.push(['Entries per job']);rows.push(['Date','Name','Job','Hours']);
+      S.entries.filter(x=>x.d>=ws&&x.d<=days[6]).forEach(x=>rows.push([x.d,emp(x.e).name,job(x.j).code+' '+job(x.j).name,x.h]));
+      dl(`register-week-${weekNo(ws)}-${ws.slice(0,4)}.csv`,csv(rows));break}
+    case 'printweek':{const ws=UI.week,days=weekDays(ws);const emps=empsForRange(ws,days[6]);
+      doPrint(`<div style="font-family:Arial;color:#111;padding:10mm"><h2 style="margin:0">${esc(S.settings.company)} – Aanwesigheid register</h2><p>Week ${weekNo(ws)}: ${fmtDL(ws)} – ${fmtDL(days[6])}</p><table class="pr-table" style="width:100%;border-collapse:collapse"><tr><th>Name</th>${days.map(d=>`<th>${DOW[dow(d)]} ${fmtD(d)}</th>`).join('')}<th>Total</th></tr>${emps.map(e=>`<tr><td>${esc(e.name)}</td>${days.map(d=>{const h=cellHours(e.id,d),n=S.notes[e.id+'|'+d];return `<td>${h?h2(h):''} ${n?'<small>'+esc(CODES[n.c]?.l||'')+'</small>':''}</td>`}).join('')}<td><b>${h2(days.reduce((a,d)=>a+cellHours(e.id,d),0))}</b></td></tr>`).join('')}</table></div>`);break}
+    case 'jobf':UI.jobFilter=v;render();break;
+    case 'job':jobModal(v);break;
+    case 'newjob':jobModal('');break;
+    case 'savejob':{const m=t.closest('.modal'),g=s=>m.querySelector(s).value.trim();
+      const d={code:g('#jc')||nextCode(),name:g('#jn')||'Untitled job',client:g('#jcl'),quote:+g('#jq')||0,color:g('#jcol'),notes:g('#jno')};
+      if(v)Object.assign(job(v),d);else S.jobs.push({id:uid(),status:'active',...d});save();closeModal();render();break}
+    case 'togglejob':{const j=job(v);j.status=j.status==='active'?'done':'active';save();closeModal();render();break}
+    case 'deljob':if(confirm('Delete this job?')){S.jobs=S.jobs.filter(j=>j.id!==v);save();closeModal();render()}break;
+    case 'pf':UI.peopleFilter=v;render();break;
+    case 'emp':empModal(v);break;
+    case 'newemp':empModal('');break;
+    case 'saveemp':{const m=t.closest('.modal'),g=s=>m.querySelector(s).value.trim();
+      const d={no:+g('#pno')||null,name:g('#pn')||'New person',nick:g('#pk'),role:g('#pr'),type:g('#pt'),rate:+g('#prt')||0,start:g('#ps'),end:g('#pe'),color:g('#pc'),endNote:g('#pnote'),active:m.querySelector('#pa').checked};
+      if(v)Object.assign(emp(v),d);else S.emps.push({id:'e'+uid(),...d});save();closeModal();render();break}
+    case 'delemp':if(confirm('Delete this person?')){S.emps=S.emps.filter(e=>e.id!==v);save();closeModal();render()}break;
+    case 'range':UI.range=v;render();break;
+    case 'csvrange':{const[a,b]=rangeOf();dl(`time-entries_${a}_to_${b}.csv`,entriesCSV(a,b));break}
+    case 'csvall':dl('time-entries-all.csv',entriesCSV());break;
+    case 'pw':UI.payWeek=v==='0'?weekStart(todayISO()):addDays(UI.payWeek,7*+v);render();break;
+    case 'print1':{const r=payRows(UI.payWeek).find(r=>r.e.id===v);doPrint(slipHTML(r,UI.payWeek));break}
+    case 'printall':{const rs=payRows(UI.payWeek);if(!rs.length)return toast('Nothing to print');doPrint(rs.map(r=>slipHTML(r,UI.payWeek)).join(''));break}
+    case 'backup':dl(`dagregister-backup-${todayISO()}.json`,JSON.stringify(S),'application/json');break;
+  }
+});
+document.addEventListener('input',ev=>{
+  const t=ev.target;
+  if(t.dataset.filter==='jp'){const q=t.value.toLowerCase();document.querySelectorAll('#jp .jobbtn').forEach(b=>b.style.display=b.dataset.s.includes(q)?'':'none')}
+  if(t.dataset.l==='h')updLnTot(t.closest('.modal'));
+  if(t.dataset.act==='jobq'){UI.jobQ=t.value;const p=t.selectionStart;render();const n=document.querySelector('[data-act=jobq]');n.focus();n.setSelectionRange(p,p)}
+});
+document.addEventListener('change',ev=>{
+  const t=ev.target;
+  if(t.dataset.cell){const[e,d]=t.dataset.cell.split('|');if(!setCellHours(e,d,t.value.trim())){cellModal(e,d);toast('Split over several jobs – edit lines here')}else render();return}
+  if(t.dataset.act==='wkpick'&&t.value){UI.week=weekStart(t.value);render()}
+  if(t.dataset.act==='from'){UI.from=t.value;render()}
+  if(t.dataset.act==='to'){UI.to=t.value;render()}
+  if(t.dataset.set){S.settings[t.dataset.set]=t.value;save();renderNav();toast('Saved')}
+  if(t.dataset.std){S.settings.std[t.dataset.std]=+t.value||0;save();toast('Saved')}
+  if(t.dataset.ded){const k=t.dataset.ded;S.deds[k]=S.deds[k]||{amt:0,label:''};S.deds[k][t.dataset.k]=t.dataset.k==='amt'?(+t.value||0):t.value;save();render()}
+  if((t.dataset.act==='restore'||t.dataset.act==='import')&&t.files[0]){const r=new FileReader();r.onload=async()=>{try{const d=stateFromFile(JSON.parse(r.result));if(t.dataset.act==='restore'&&!confirm('Restore this backup for EVERYONE? It replaces all current data.'))return;S=d;reindex();const m=$('#impMsg');if(m)m.textContent='Uploading '+S.entries.length+' entries…';clearTimeout(save.t);await flush();render();toast('Data loaded')}catch(e){toast(e.message||'Not a valid file')}};r.readAsText(t.files[0])}
+  if(t.dataset.role){(async()=>{const{error}=await sb.from('profiles').update({role:t.value}).eq('id',t.dataset.role);toast(error?error.message:'Access updated');await loadProfiles();render()})()}
+});
+// keyboard nav in register: Enter / arrows move between cells
+document.addEventListener('keydown',ev=>{
+  const t=ev.target;if(!t.dataset||!t.dataset.cell)return;
+  const all=[...document.querySelectorAll('[data-cell]')],i=all.indexOf(t),cols=7;
+  let n=null;
+  if(ev.key==='Enter'||ev.key==='ArrowDown')n=all[i+cols];
+  else if(ev.key==='ArrowUp')n=all[i-cols];
+  else if(ev.key==='ArrowRight'&&t.selectionStart===t.value.length)n=all[i+1];
+  else if(ev.key==='ArrowLeft'&&t.selectionStart===0)n=all[i-1];
+  if(n){ev.preventDefault();const key=n.dataset.cell;t.blur();setTimeout(()=>{const m=document.querySelector(`[data-cell="${key}"]`);m&&(m.focus(),m.select())},0)}
+});
+
+try{document.documentElement.dataset.theme=localStorage.getItem('dagregister.theme')==='light'?'light':'dark'}catch(e){}
+shell(false);afterLogin();
+</script>
+</body>
+</html>

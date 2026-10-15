@@ -107,6 +107,8 @@ tbody tr:hover td{background:color-mix(in srgb,var(--panel2) 60%,transparent)}
 .tag{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;text-transform:uppercase;cursor:pointer}
 .more{position:absolute;top:2px;right:2px;opacity:0;background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px}
 td.c:hover .more{opacity:1}
+.c-leave{background:color-mix(in srgb,var(--blue) 12%,transparent)}
+@media(max-width:1560px){.navgrp{display:none}nav button{padding:8px 9px}.brand small{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .c-absent{background:color-mix(in srgb,var(--bad) 12%,transparent)}
 .namecell{display:flex;gap:8px;align-items:center}
 .namecell .av{width:28px;height:28px;font-size:11px;border-radius:8px}
@@ -190,8 +192,8 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
 
 <script>
 const KEY='dagregister.v1';
-const TABS=[['today','Today'],['register','Week register'],['jobs','Jobs'],['people','People'],['pay','Payroll'],['reports','Reports'],['settings','Settings']];
-const LOCKED_TABS=['people','reports','pay','settings'];
+const TABS=[['today','Today'],['register','Week register'],['jobs','Jobs'],['people','People'],['leave','Leave'],['pay','Payroll'],['reports','Reports'],['settings','Settings']];
+const LOCKED_TABS=['people','leave','reports','pay','settings'];
 const CODES={
   absent:{l:'Absent',c:'var(--bad)',off:1},
   absent_r:{l:'Absent (reason)',c:'#ff8f6b',off:1},
@@ -235,13 +237,13 @@ let S, IDX, UI={tab:'today',week:weekStart(todayISO()),jobFilter:'active',jobQ:'
 function defaults(){
   return {v:1,settings:{company:'BOLAND 3D SOLUTIONS (PTY) LTD',address:'22c Krone Street\nWorcester\n6850',cur:'R',
     dayStart:'07:30',dayEnd:'16:30',lunchFrom:'12:30',lunchTo:'13:00',round:15,grace:10,
-    std:{0:0,1:8,2:8,3:8,4:8,5:6,6:0},defJob:'j-gen',pin:'',theme:'dark'},
+    std:{0:0,1:8,2:8,3:8,4:8,5:6,6:0},defJob:'j-gen',pin:'',theme:'dark',leave:leaveDefaults()},
     emps:[],jobs:[
       {id:'j-imp',code:'J000',name:'Unallocated (imported from Excel)',client:'',quote:0,status:'done',color:'#8d95a3'},
       {id:'j-gen',code:'J001',name:'Workshop general',client:'Internal',quote:0,status:'active',color:'#5aa9ff'},
       {id:'j-mnt',code:'J002',name:'Cleaning & maintenance',client:'Internal',quote:0,status:'active',color:'#a3d65c'},
       {id:uid(),code:'J101',name:'Example: Carport 6x6m',client:'Example client',quote:120,status:'active',color:'#ff7a1a'}],
-    entries:[],notes:{},adv:[],deds:{},clocks:{}};
+    entries:[],notes:{},adv:[],deds:{},clocks:{},leave:[]};
 }
 /* ---------- cloud (Supabase) ---------- */
 const SB_URL='https://wdvownwsobsfhpelrlcb.supabase.co';
@@ -257,15 +259,15 @@ function canon(v){
 function toRecs(s){
   const m=new Map(),put=(k,id,d)=>m.set(k+SEP+id,canon(d));
   s.emps.forEach(x=>put('emp',x.id,x));s.jobs.forEach(x=>put('job',x.id,x));s.entries.forEach(x=>put('entry',x.id,x));
-  for(const k in s.notes)put('note',k,s.notes[k]);s.adv.forEach(x=>put('adv',x.id,x));
+  for(const k in s.notes)put('note',k,s.notes[k]);s.adv.forEach(x=>put('adv',x.id,x));(s.leave||[]).forEach(x=>put('leave',x.id,x));
   for(const k in s.deds)put('ded',k,s.deds[k]);for(const k in s.clocks)put('clock',k,s.clocks[k]);
   put('settings','main',s.settings);return m;
 }
 function applyRec(s,kind,id,data){ // data null => delete
-  const arr={emp:'emps',job:'jobs',entry:'entries',adv:'adv'}[kind],map={note:'notes',ded:'deds',clock:'clocks'}[kind];
+  if(!s.leave)s.leave=[];const arr={emp:'emps',job:'jobs',entry:'entries',adv:'adv',leave:'leave'}[kind],map={note:'notes',ded:'deds',clock:'clocks'}[kind];
   if(arr){const i=s[arr].findIndex(x=>x.id===id);if(data===null){if(i>=0)s[arr].splice(i,1)}else if(i>=0)s[arr][i]=data;else s[arr].push(data)}
   else if(map){if(data===null)delete s[map][id];else s[map][id]=data}
-  else if(kind==='settings'&&data)s.settings={...defaults().settings,...data};
+  else if(kind==='settings'&&data){s.settings={...defaults().settings,...data};for(const k in PH_CACHE)delete PH_CACHE[k]}
 }
 function emptyState(){const s=defaults();s.jobs=[];return s}
 async function loadData(){
@@ -419,6 +421,7 @@ function reindex(){
   for(const e of S.emps)IDX.emp.set(e.id,e);
   for(const j of S.jobs)IDX.job.set(j.id,j);
   for(const en of S.entries){const k=en.e+'|'+en.d;if(!IDX.byED.has(k))IDX.byED.set(k,[]);IDX.byED.get(k).push(en)}
+  if(!S.leave)S.leave=[];leaveIndex();
 }
 const cellEntries=(e,d)=>IDX.byED.get(e+'|'+d)||[];
 const cellHours=(e,d)=>cellEntries(e,d).reduce((a,x)=>a+(+x.h||0),0);
@@ -476,7 +479,7 @@ function render(){
   renderNav();
   const app=$('#app');
   if(UI.locked&&LOCKED_TABS.includes(UI.tab)){app.innerHTML=`<div class="lockscreen panel"><div style="font-size:42px">🔒</div><h1>Manager area locked</h1><p class="muted">Unlock with the padlock button at the top right.</p></div>`;return}
-  ({today:vToday,register:vRegister,jobs:vJobs,people:vPeople,reports:vReports,pay:vPay,settings:vSettings})[UI.tab](app);
+  ({today:vToday,register:vRegister,jobs:vJobs,people:vPeople,leave:vLeave,reports:vReports,pay:vPay,settings:vSettings})[UI.tab](app);
 }
 
 /* ---------- TODAY ---------- */
@@ -485,6 +488,8 @@ function statusOf(e,d){
   const note=S.notes[e.id+'|'+d];
   const h=cellHours(e.id,d);
   if(c)return{k:'in',c,h,note};
+  const lv=leaveOn(e.id,d);if(lv&&!h)return{k:'abs',h,note:{c:'leave',t:ltype(lv.t).name,lv:1}};
+  if(holidayName(d)&&!h)return{k:'abs',h,note:{c:'holiday',t:holidayName(d),lv:1}};
   if(note&&CODES[note.c]?.off)return{k:'abs',h,note};
   if(h>0)return{k:'done',h,note};
   return{k:'out',h,note};
@@ -518,10 +523,10 @@ function vToday(app){
 function tileHTML(e,s){
   let mid='',pill='';
   if(s.k==='in'){const j=job(s.c.j);pill='<span class="pill p-in">On site</span>';mid=`<span class="jobchip"><span class="dot" style="background:${j.color}"></span>${esc(j.code)} · ${esc(j.name)}</span><div class="timer" data-since="${s.c.d} ${s.c.t}" data-base="${s.h}">0h 00m</div>`}
-  else if(s.k==='abs'){pill=`<span class="pill p-abs">${esc(CODES[s.note.c].l)}</span>`;mid=`<small class="muted">${esc(s.note.t||'')}</small>`}
+  else if(s.k==='abs'){pill=`<span class="pill p-abs">${esc(s.note.lv?s.note.t:CODES[s.note.c].l)}</span>`;mid=s.note.lv?'':`<small class="muted">${esc(s.note.t||'')}</small>`}
   else if(s.k==='done'){pill='<span class="pill p-done">Logged</span>';mid=jobsMini(e.id,todayISO())}
   else{pill='<span class="pill p-out">Not in</span>';mid='<small class="muted">Tap to clock in</small>'}
-  const late=s.note&&!CODES[s.note.c]?.off?`<span class="pill p-warn">${esc(CODES[s.note.c]?.l||'')}</span>`:'';
+  const late=s.note&&!s.note.lv&&!CODES[s.note.c]?.off?`<span class="pill p-warn">${esc(CODES[s.note.c]?.l||'')}</span>`:'';
   return `<div class="tile ${s.k}" data-act="tile" data-v="${e.id}">
     <div class="who">${avatar(e)}<div><b>${esc(nm(e))}</b><small>${esc(e.role||'')}</small></div></div>
     ${mid}
@@ -591,11 +596,12 @@ function vRegister(app){
       eh+=h;ew+=ents.reduce((a,x)=>a+x.h*(x.r??e.rate),0);dayT[i]+=h;
       const by={};ents.forEach(x=>by[x.j]=(by[x.j]||0)+ +x.h);
       const bars=h?`<div class="bars">${Object.entries(by).map(([j,v])=>`<i style="width:${v/h*100}%;background:${job(j).color}" title="${esc(job(j).code)} ${h2(v)}h"></i>`).join('')}</div>`:'';
-      const off=note&&CODES[note.c]?.off;
+      const lv=leaveOn(e.id,d),off=(note&&CODES[note.c]?.off)||(lv&&!h);
+      const lvTag=lv?`<span class="tag" data-act="editleave" data-v="${lv.id}" style="color:${ltype(lv.t).color};background:var(--panel2)" title="${esc(ltype(lv.t).name)}">${esc(ltype(lv.t).name.split(' ')[0])}</span>`:'';
       const tag=note?`<span class="tag" data-act="cell" data-e="${e.id}" data-d="${d}" style="color:${CODES[note.c]?.c||'var(--muted)'};background:var(--panel2)" title="${esc(note.t||'')}">${esc((CODES[note.c]?.l||'note').split(' ')[0])}</span>`:'';
       const advs=S.adv.filter(a=>a.e===e.id&&a.d===d);
       const advTag=advs.length&&money_on()?`<span class="tag" style="color:var(--acc);background:var(--panel2)" title="Advance">${money(advs.reduce((a,x)=>a+x.amt,0)).replace(/\.00$/,'')}</span>`:'';
-      return `<td class="c ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''} ${off&&!h?'c-absent':''}"><div class="cell ${h?'has':''}"><input inputmode="decimal" value="${h?h2(h):''}" placeholder="${off?'–':'·'}" data-cell="${e.id}|${d}" ${Object.keys(by).length>1?'title="Split over several jobs – click ⋯ to edit"':''}>${bars}${tag}${advTag}</div><button class="more" data-act="cell" data-e="${e.id}" data-d="${d}" title="Details / jobs / notes">⋯</button></td>`;
+      return `<td class="c ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''} ${lv&&!h?'c-leave':off&&!h?'c-absent':''}"><div class="cell ${h?'has':''}"><input inputmode="decimal" value="${h?h2(h):''}" placeholder="${off?'–':'·'}" data-cell="${e.id}|${d}" ${Object.keys(by).length>1?'title="Split over several jobs – click ⋯ to edit"':''}>${bars}${lvTag}${tag}${advTag}</div><button class="more" data-act="cell" data-e="${e.id}" data-d="${d}" title="Details / jobs / notes">⋯</button></td>`;
     }).join('');
     tot+=eh;totW+=ew;
     return `<tr><td><div class="namecell">${avatar(e)}<div><b>${esc(nm(e))}</b>${!e.active?' <span class="pill p-out">inactive</span>':''}</div></div></td>${tds}<td class="num"><b>${h2(eh)}</b></td>${money_on()?`<td class="num">${money(e.rate)}</td><td class="num"><b>${money(ew)}</b></td>`:''}</tr>`;
@@ -611,7 +617,7 @@ function vRegister(app){
    <button class="btn" data-act="printweek">🖨 Print</button>
   </div>
   <div class="tablewrap sec reg" style="margin-top:12px"><table>
-   <thead><tr><th>Person</th>${days.map(d=>`<th class="num ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''}" style="text-align:center">${DOW[dow(d)]}<br><span style="font-weight:500">${fmtD(d)}</span></th>`).join('')}<th class="num">Hours</th>${money_on()?'<th class="num">Rate</th><th class="num">Wages</th>':''}</tr></thead>
+   <thead><tr><th>Person</th>${days.map(d=>`<th class="num ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''}" style="text-align:center">${DOW[dow(d)]}<br><span style="font-weight:500">${fmtD(d)}</span>${holidayName(d)?`<br><span class="pill p-warn" title="${esc(holidayName(d))}">PH</span>`:''}</th>`).join('')}<th class="num">Hours</th>${money_on()?'<th class="num">Rate</th><th class="num">Wages</th>':''}</tr></thead>
    <tbody>${rows||`<tr><td colspan="12" class="empty">No one on the register this week.</td></tr>`}</tbody>
    <tfoot><tr><th>Total</th>${dayT.map(h=>`<th class="num" style="text-align:center">${h?h2(h):''}</th>`).join('')}<th class="num">${h2(tot)}</th>${money_on()?`<th></th><th class="num">${money(totW)}</th>`:''}</tr></tfoot>
   </table></div>
@@ -715,10 +721,10 @@ function attStats(e,a,b){
   for(let d=a;d<=b;d=addDays(d,1)){
     if(E.start&&d<E.start)continue;if(E.end&&d>E.end)break;
     const hh=cellHours(e,d),n=S.notes[e+'|'+d];
-    const isWork=(+S.settings.std[dow(d)]||0)>0&&!(n&&n.c==='holiday');
+    const isWork=(+S.settings.std[dow(d)]||0)>0&&!(n&&n.c==='holiday')&&!holidayName(d)&&!leaveOn(e,d);
     if(isWork)sched++;
     if(hh>0){present++;h+=hh;wage+=cellEntries(e,d).reduce((x,y)=>x+y.h*(y.r??E.rate),0)}
-    if(n&&CODES[n.c]?.off&&n.c!=='holiday'&&n.c!=='rain')absent++;
+    if(n&&CODES[n.c]?.off&&n.c!=='holiday'&&n.c!=='rain'&&!leaveOn(e,d))absent++;
     if(n&&(n.c==='late'||n.c==='early'))late++;
   }
   if(present>sched)present=sched;
@@ -751,7 +757,7 @@ function empModal(id){
   <label class="f" style="margin-top:12px">Notes / reason for leaving<textarea id="pnote" rows="2">${esc(e.endNote||'')}</textarea></label>
   <label class="row" style="margin-top:12px"><input type="checkbox" id="pa" ${e.active?'checked':''}> Active (shows on Today board and register)</label>
   <div class="muted" style="font-size:12px;margin-top:8px">A rate change applies to new hours only – history keeps the rate that applied at the time.</div>
-  <div class="row" style="margin-top:18px">${id&&!S.entries.some(x=>x.e===id)?`<button class="btn bad" data-act="delemp" data-v="${id}">Delete</button>`:''}<span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="saveemp" data-v="${id}">Save</button></div>`,null,id?'wide':'');
+  <div class="row" style="margin-top:18px">${id&&!S.entries.some(x=>x.e===id)?`<button class="btn bad" data-act="delemp" data-v="${id}">Delete</button>`:''}${id?`<button class="btn" data-act="empleave" data-v="${id}">🌴 Leave balances</button>`:''}<span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="saveemp" data-v="${id}">Save</button></div>`,null,id?'wide':'');
 }
 
 /* ---------- REPORTS ---------- */
@@ -802,8 +808,9 @@ function payRows(ws){
     const adv=S.adv.filter(x=>x.e===e.id&&x.d>=ws&&x.d<=we);
     const advT=adv.reduce((a,x)=>a+x.amt,0);
     const ded=S.deds[e.id+'|'+ws]||{amt:0,label:''};
-    return{e,h,byR,gross,adv,advT,ded,net:gross-advT-(+ded.amt||0),days:new Set(ents.map(x=>x.d)).size};
-  }).filter(r=>r.h>0||r.advT>0);
+    const lv=leavePay(e,ws,we),lvAmt=lv.reduce((a,x)=>a+x.h*x.rate,0),g=gross+lvAmt;
+    return{e,h,byR,gross:g,work:gross,lv,lvAmt,adv,advT,ded,net:g-advT-(+ded.amt||0),days:new Set(ents.map(x=>x.d)).size};
+  }).filter(r=>r.h>0||r.advT>0||r.lvAmt>0);
 }
 function vPay(app){
   const ws=UI.payWeek,we=addDays(ws,6),rows=payRows(ws);
@@ -812,10 +819,10 @@ function vPay(app){
   <button class="btn icon" data-act="pw" data-v="-1">←</button><button class="btn" data-act="pw" data-v="0">This week</button><button class="btn icon" data-act="pw" data-v="1">→</button>
   <button class="btn pri" data-act="printall">🖨 Print all payslips</button></div>
   <div class="kpis"><div class="kpi"><span>People paid</span><b>${rows.length}</b></div><div class="kpi"><span>Hours</span><b>${h2(T('h'))}</b></div><div class="kpi"><span>Gross</span><b style="font-size:21px">${money(T('gross'))}</b></div><div class="kpi"><span>Advances</span><b style="font-size:21px;color:var(--acc)">${money(T('advT'))}</b></div><div class="kpi"><span>Net to pay</span><b style="font-size:21px;color:var(--ok)">${money(T('net'))}</b></div></div>
-  <div class="tablewrap"><table><thead><tr><th>Person</th><th class="num">Days</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Gross</th><th class="num">Advances</th><th>Other deduction</th><th class="num">Net pay</th><th></th></tr></thead><tbody>
-  ${rows.map(r=>`<tr><td><div class="namecell">${avatar(r.e)}<div><b>${esc(nm(r.e))}</b><div class="muted" style="font-size:12px">#${r.e.no??''} ${esc(r.e.name)}</div></div></div></td><td class="num">${r.days}</td><td class="num">${h2(r.h)}</td><td class="num">${Object.keys(r.byR).map(x=>money(+x)).join(' / ')}</td><td class="num">${money(r.gross)}</td><td class="num" title="${esc(r.adv.map(a=>fmtD(a.d)+': '+a.note).join('\n'))}">${r.advT?money(r.advT):''}</td>
+  <div class="tablewrap"><table><thead><tr><th>Person</th><th class="num">Days</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Paid leave</th><th class="num">Gross</th><th class="num">Advances</th><th>Other deduction</th><th class="num">Net pay</th><th></th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td><div class="namecell">${avatar(r.e)}<div><b>${esc(nm(r.e))}</b><div class="muted" style="font-size:12px">#${r.e.no??''} ${esc(r.e.name)}</div></div></div></td><td class="num">${r.days}</td><td class="num">${h2(r.h)}</td><td class="num">${Object.keys(r.byR).map(x=>money(+x)).join(' / ')}</td><td class="num" title="${esc(r.lv.map(x=>x.label+': '+h2(x.days)+' d').join('\n'))}">${r.lvAmt?money(r.lvAmt):''}</td><td class="num">${money(r.gross)}</td><td class="num" title="${esc(r.adv.map(a=>fmtD(a.d)+': '+a.note).join('\n'))}">${r.advT?money(r.advT):''}</td>
   <td><div class="row" style="flex-wrap:nowrap;gap:6px"><input type="text" placeholder="label" value="${esc(r.ded.label)}" style="width:110px" data-ded="${r.e.id}|${ws}" data-k="label"><input type="number" placeholder="0" value="${r.ded.amt||''}" style="width:80px" data-ded="${r.e.id}|${ws}" data-k="amt"></div></td>
-  <td class="num"><b>${money(r.net)}</b></td><td><button class="btn sm" data-act="print1" data-v="${r.e.id}">🖨</button></td></tr>`).join('')||'<tr><td colspan=9 class="empty">No hours in this week.</td></tr>'}
+  <td class="num"><b>${money(r.net)}</b></td><td><button class="btn sm" data-act="print1" data-v="${r.e.id}">🖨</button></td></tr>`).join('')||'<tr><td colspan=10 class="empty">No hours in this week.</td></tr>'}
   </tbody></table></div>
   <div class="muted sec" style="font-size:12px">Advances come from the week register (⋯ on a day). Payslip layout follows your Excel “Payslip” sheet; edit the company details under Settings.</div>`;
 }
@@ -826,12 +833,167 @@ function slipHTML(r,ws){
   return `<div class="slip"><table style="width:100%;border:0"><tr><td style="border:0;vertical-align:top"><h3>${esc(s.company)}</h3>${esc(s.address).replace(/\n/g,'<br>')}</td><td style="border:0;text-align:right;vertical-align:top"><h3>PAYSLIP</h3>Week ${weekNo(ws)} · ${ws.slice(0,4)}<br>${fmtD(ws)} to ${fmtD(we)} ${we.slice(0,4)}</td></tr></table>
   <table style="width:100%;margin-top:12px"><tr><th style="width:30%">Employee number</th><td>${r.e.no??''}</td><th style="width:20%">Pay date</th><td>${fmtDL(we)}</td></tr><tr><th>Employee name</th><td>${esc(r.e.name)}</td><th>Designation</th><td>${esc(r.e.role||'')}</td></tr><tr><th>Date of joining</th><td>${r.e.start||''}</td><th>Days worked</th><td>${r.days}</td></tr></table>
   <table style="width:100%;margin-top:12px"><tr><th colspan=3>EARNINGS</th><th colspan=2>DEDUCTIONS</th></tr><tr><th>Hours</th><th>Amount / hour</th><th>Total</th><th>Description</th><th>Amount</th></tr>
-  ${(()=>{const e=Object.entries(r.byR),n=Math.max(e.length,deds.length,1);let o='';for(let i=0;i<n;i++){const a=e[i],d=deds[i];o+=`<tr><td>${a?h2(a[1]):''}</td><td>${a?money(+a[0]):''}</td><td style="text-align:right">${a?money(a[1]*a[0]):''}</td><td>${d?esc(d[0]):''}</td><td style="text-align:right">${d?money(d[1]):''}</td></tr>`}return o})()}
+  ${(()=>{const e=[...Object.entries(r.byR).map(([rt,h])=>[rt,h,'']),...r.lv.map(x=>[x.rate,x.h,x.label])],n=Math.max(e.length,deds.length,1);let o='';for(let i=0;i<n;i++){const a=e[i],d=deds[i];o+=`<tr><td>${a?h2(a[1])+(a[2]?' <small>('+esc(a[2])+')</small>':''):''}</td><td>${a?money(+a[0]):''}</td><td style="text-align:right">${a?money(a[1]*a[0]):''}</td><td>${d?esc(d[0]):''}</td><td style="text-align:right">${d?money(d[1]):''}</td></tr>`}return o})()}
   <tr><th colspan=2>Gross earnings</th><td style="text-align:right"><b>${money(r.gross)}</b></td><th>Total deductions</th><td style="text-align:right"><b>${money(r.advT+(+r.ded.amt||0))}</b></td></tr></table>
   <table style="width:100%;margin-top:12px"><tr><td class="net">NET PAY</td><td class="net" style="text-align:right">${money(r.net)}</td></tr></table>
   <div style="margin-top:28px;display:flex;justify-content:space-between"><span>Employee signature: ____________________</span><span>Employer: ____________________</span></div></div>`;
 }
 function doPrint(html){$('#print').innerHTML=html;setTimeout(()=>window.print(),50)}
+
+/* ---------- LEAVE ---------- */
+function leaveDefaults(){return{basis:'anniv',trackFrom:'2026-01-01',extraHolidays:'',types:[
+  {id:'annual',name:'Annual leave',color:'#5aa9ff',paid:true,mode:'accrue',days:15,cycle:12,per:17,carry:true,carryMax:'',extraAfter:4,extraDays:5,minMonths:0,firstMonths:0,firstPer:0,cert:0},
+  {id:'sick',name:'Sick leave',color:'#c78bff',paid:true,mode:'cycle',days:30,cycle:36,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:0,firstMonths:6,firstPer:26,cert:2},
+  {id:'family',name:'Family responsibility',color:'#ff8f6b',paid:true,mode:'cycle',days:3,cycle:12,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:4,firstMonths:0,firstPer:0,cert:0},
+  {id:'parental',name:'Parental leave (UIF)',color:'#4fc3d9',paid:false,mode:'cycle',days:10,cycle:12,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:0,firstMonths:0,firstPer:0,cert:0},
+  {id:'maternity',name:'Maternity (4 months, UIF)',color:'#ff5d8f',paid:false,mode:'none',days:0,cycle:12,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:0,firstMonths:0,firstPer:0,cert:0},
+  {id:'unpaid',name:'Unpaid leave',color:'#9aa3b2',paid:false,mode:'none',days:0,cycle:12,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:0,firstMonths:0,firstPer:0,cert:0}]}}
+const LS=()=>{if(!S.settings.leave)S.settings.leave=leaveDefaults();return S.settings.leave};
+const ltype=id=>LS().types.find(t=>t.id===id)||{id,name:id,color:'#888',paid:false,mode:'none'};
+const addMonths=(s,n)=>{const d=parse(s);const day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+n);const last=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,last));return toISO(d)};
+function easter(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return y+'-'+pad(mo)+'-'+pad(da)}
+const PH_CACHE={};
+function publicHolidays(y){
+  if(PH_CACHE[y])return PH_CACHE[y];
+  const m=new Map(),add=(d,n)=>{m.set(d,n);if(dow(d)===0&&!m.has(addDays(d,1)))m.set(addDays(d,1),n+' (observed)')};
+  [['01-01',"New Year's Day"],['03-21','Human Rights Day'],['04-27','Freedom Day'],['05-01',"Workers' Day"],['06-16','Youth Day'],['08-09',"National Women's Day"],['09-24','Heritage Day'],['12-16','Day of Reconciliation'],['12-25','Christmas Day'],['12-26','Day of Goodwill']].forEach(([md,n])=>add(y+'-'+md,n));
+  const e=easter(y);m.set(addDays(e,-2),'Good Friday');m.set(addDays(e,1),'Family Day');
+  String(LS().extraHolidays||'').split(/[\n,;]+/).map(s=>s.trim()).filter(s=>s.startsWith(y+'-')).forEach(s=>{const[d,...n]=s.split(/\s+/);m.set(d,n.join(' ')||'Company holiday')});
+  return PH_CACHE[y]=m;
+}
+const holidayName=d=>publicHolidays(+d.slice(0,4)).get(d);
+const isWorkday=d=>(+S.settings.std[dow(d)]||0)>0&&!holidayName(d);
+function workdaysBetween(a,b){let n=0;for(let d=a;d<=b&&n<400;d=addDays(d,1))if(isWorkday(d))n++;return n}
+function leaveIndex(){
+  for(const k in PH_CACHE)delete PH_CACHE[k];
+  IDX.leave=new Map();IDX.wd=new Map();IDX.first=new Map();
+  for(const en of S.entries){if(+en.h>0){if(!IDX.wd.has(en.e))IDX.wd.set(en.e,new Set());IDX.wd.get(en.e).add(en.d);const f=IDX.first.get(en.e);if(!f||en.d<f)IDX.first.set(en.e,en.d)}}
+  for(const[e,s]of IDX.wd)IDX.wd.set(e,[...s].sort());
+  for(const r of (S.leave||[])){if(r.adj||!r.from)continue;let n=0;for(let d=r.from;d<=(r.to||r.from)&&n<370;d=addDays(d,1),n++)if(isWorkday(d))IDX.leave.set(r.e+'|'+d,r)}
+}
+const leaveOn=(e,d)=>IDX.leave?.get(e+'|'+d);
+function workedCount(e,a,b){const arr=IDX.wd.get(e)||[];let lo=0,hi=arr.length;while(lo<hi){const m=(lo+hi)>>1;arr[m]<a?lo=m+1:hi=m}let i=lo;while(i<arr.length&&arr[i]<=b)i++;return i-lo}
+const startOf=e=>e.start||IDX.first.get(e.id)||todayISO();
+function cycleStartAt(e,t,d){
+  const st=startOf(e),cyc=+t.cycle||12;
+  if(LS().basis==='calendar'&&cyc===12)return d.slice(0,4)+'-01-01';
+  if(d<st)return st;
+  let k=Math.floor(((+d.slice(0,4)-+st.slice(0,4))*12+(+d.slice(5,7)-+st.slice(5,7)))/cyc)*cyc;
+  let cs=addMonths(st,k);if(cs>d)cs=addMonths(st,k-cyc);if(addMonths(cs,cyc)<=d)cs=addMonths(cs,cyc);
+  return cs;
+}
+function leaveSum(e,t,a,b,adj){return (S.leave||[]).filter(r=>r.e===e&&r.t===t&&!!r.adj===!!adj&&(r.from||'')>=a&&(r.from||'')<=b).reduce((s,r)=>s+(+r.days||0),0)}
+function leaveBal(e,tid,at=todayISO()){
+  const t=ltype(tid),E=typeof e==='string'?emp(e):e,tf=LS().trackFrom||'2000-01-01';
+  const st=startOf(E);
+  const cs=cycleStartAt(E,t,at),ce=addDays(addMonths(cs,+t.cycle||12),-1);
+  const from=cs>tf?cs:tf;
+  const takenThis=leaveSum(E.id,tid,from,ce,false),adjThis=leaveSum(E.id,tid,from,ce,true);
+  if(t.mode==='none')return{t,cs,ce,taken:takenThis,bal:null};
+  if(t.mode==='cycle'){
+    let ent=+t.days||0,note='';
+    if(+t.minMonths&&at<addMonths(st,+t.minMonths)){ent=0;note=`Eligible after ${t.minMonths} months' service (${fmtD(addMonths(st,+t.minMonths))})`}
+    else if(+t.firstMonths&&+t.firstPer&&at<addMonths(st,+t.firstMonths)){ent=Math.floor(workedCount(E.id,st,at)/+t.firstPer);note=`First ${t.firstMonths} months: 1 day per ${t.firstPer} days worked`}
+    return{t,cs,ce,ent,taken:takenThis,adj:adjThis,bal:ent+adjThis-takenThis,note};
+  }
+  // accrue (annual): walk the cycles since tracking started, carrying the balance forward
+  let bal=0,c=cycleStartAt(E,t,tf>st?tf:st),guard=0,cur=null;
+  while(c<=at&&guard++<60){
+    const cend=addDays(addMonths(c,+t.cycle||12),-1),a=c>tf?c:tf,b=cend<at?cend:at;
+    const yrs=(+c.slice(0,4)-+st.slice(0,4))+((c.slice(5)>=st.slice(5))?0:-1);
+    const ent=(+t.days||0)+((+t.extraAfter&&yrs>=+t.extraAfter)?(+t.extraDays||0):0);
+    const accr=+t.per?Math.min(ent,workedCount(E.id,a,b)/+t.per):ent;
+    const tk=leaveSum(E.id,tid,a,cend,false),ad=leaveSum(E.id,tid,a,cend,true);
+    if(cend>=at){cur={ent,accr,tk,ad,carried:bal};bal+=accr+ad-tk;break}
+    bal+=accr+ad-tk;
+    if(!t.carry)bal=Math.min(bal,0);else if(t.carryMax!==''&&t.carryMax!=null)bal=Math.min(bal,+t.carryMax);
+    c=addMonths(c,+t.cycle||12);
+  }
+  cur=cur||{ent:+t.days||0,accr:0,tk:0,ad:0,carried:0};
+  return{t,cs,ce,ent:cur.ent,accrued:cur.accr,carried:cur.carried,taken:cur.tk,adj:cur.ad,bal};
+}
+const fd=n=>n==null?'—':(Math.round(n*10)/10).toString();
+function vLeave(app){
+  const L=LS(),types=L.types,emps=activeEmps(),t0=todayISO();
+  const upcoming=(S.leave||[]).filter(r=>!r.adj&&(r.to||r.from)>=addDays(t0,-14)).sort((a,b)=>a.from.localeCompare(b.from));
+  const onNow=emps.filter(e=>leaveOn(e.id,t0));
+  app.innerHTML=`<div class="row"><div><h1>Leave</h1><div class="muted">Balances follow the BCEA and the MEIBC main agreement by default – change the rules under ⚙ Leave rules.</div></div><span class="sp"></span>
+  <button class="btn" data-act="leaverules">⚙ Leave rules</button><button class="btn" data-act="leavecsv">⬇ CSV</button><button class="btn pri" data-act="newleave">+ Record leave</button></div>
+  <div class="kpis">${types.filter(t=>t.mode!=='none').slice(0,4).map(t=>{const tot=emps.reduce((a,e)=>a+(leaveBal(e,t.id).taken||0),0);return `<div class="kpi"><span><i class="dot" style="background:${t.color}"></i> ${esc(t.name)} taken (cycle)</span><b>${fd(tot)}</b></div>`}).join('')}
+   <div class="kpi"><span>On leave today</span><b>${onNow.length}</b><div class="muted" style="font-size:12px">${onNow.map(e=>esc(nm(e))).join(', ')}</div></div></div>
+  <div class="tablewrap"><table><thead><tr><th>Person</th><th>Started</th>${types.map(t=>`<th class="num"><span class="dot" style="background:${t.color}"></span> ${esc(t.name)}</th>`).join('')}</tr></thead><tbody>
+  ${emps.map(e=>`<tr style="cursor:pointer" data-act="empleave" data-v="${e.id}"><td><div class="namecell">${avatar(e)}<b>${esc(nm(e))}</b></div></td><td class="muted">${fmtD(startOf(e))} ${startOf(e).slice(0,4)}${e.start?'':' *'}</td>
+   ${types.map(t=>{const b=leaveBal(e,t.id);if(b.bal==null)return `<td class="num muted">${b.taken?fd(b.taken)+' taken':'—'}</td>`;
+     return `<td class="num"><b style="font-size:16px;color:${b.bal<0?'var(--bad)':b.bal<1?'var(--warn)':'inherit'}">${fd(b.bal)}</b><div class="muted" style="font-size:11px">${fd(b.taken)} taken${b.accrued!=null&&b.t.mode==='accrue'?' · '+fd(b.accrued)+' earned':''}</div></td>`}).join('')}</tr>`).join('')}
+  </tbody></table></div>
+  <div class="muted" style="font-size:12px;margin-top:6px">Numbers are days available now. Click a person for detail, history and opening balances. * no start date set – using first day worked.</div>
+  <div class="panel sec"><h2>Recent &amp; upcoming leave</h2>${upcoming.length?`<table><tbody>${upcoming.map(r=>{const t=ltype(r.t);return `<tr style="cursor:pointer" data-act="editleave" data-v="${r.id}"><td><span class="dot" style="background:${t.color}"></span> ${esc(t.name)}</td><td><b>${esc(nm(emp(r.e)))}</b></td><td>${fmtD(r.from)}${r.to&&r.to!==r.from?' – '+fmtD(r.to):''} ${r.from.slice(0,4)}</td><td class="num">${fd(r.days)} d</td><td class="muted">${esc(r.note||'')}${t.cert&&!r.cert&&+r.days>+t.cert?' <span class="pill p-warn">no medical cert</span>':''}</td></tr>`}).join('')}</tbody></table>`:'<div class="muted">Nothing recorded yet.</div>'}</div>`;
+}
+function leaveModal(id,pre={}){
+  const r=id?(S.leave||[]).find(x=>x.id===id):{e:pre.e||activeEmps()[0]?.id,t:pre.t||'annual',from:pre.d||todayISO(),to:pre.d||todayISO(),days:'',note:'',cert:false};
+  modal(`<div class="mhead"><h2>${id?'Edit leave':'Record leave'}</h2><button class="x" data-act="close">×</button></div>
+  <div class="grid2"><label class="f">Person<select id="lve">${S.emps.filter(e=>e.active||e.id===r.e).sort((a,b)=>nm(a).localeCompare(nm(b))).map(e=>`<option value="${e.id}" ${e.id===r.e?'selected':''}>${esc(nm(e))} – ${esc(e.name)}</option>`).join('')}</select></label>
+  <label class="f">Type<select id="lvt">${LS().types.map(t=>`<option value="${t.id}" ${t.id===r.t?'selected':''}>${esc(t.name)}${t.paid?'':' (unpaid)'}</option>`).join('')}</select></label></div>
+  <div class="grid3" style="margin-top:12px"><label class="f">From<input type="date" id="lvf" value="${r.from}"></label><label class="f">To<input type="date" id="lvto" value="${r.to||r.from}"></label><label class="f">Working days<input type="number" step="0.5" min="0" id="lvd" value="${r.days}"></label></div>
+  <div class="muted" id="lvinfo" style="font-size:12px;margin-top:8px"></div>
+  <label class="f" style="margin-top:12px">Note<input type="text" id="lvn" value="${esc(r.note||'')}" placeholder="e.g. funeral of grandmother, flu"></label>
+  <label class="row" style="margin-top:10px"><input type="checkbox" id="lvc" ${r.cert?'checked':''}> Medical certificate / proof received</label>
+  <div class="row" style="margin-top:18px">${id?`<button class="btn bad" data-act="delleave" data-v="${id}">Delete</button>`:''}<span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="saveleave" data-v="${id||''}">Save</button></div>`,m=>{m._auto=!r.days;updLeaveInfo(m)});
+}
+function updLeaveInfo(m){
+  const e=m.querySelector('#lve').value,t=m.querySelector('#lvt').value,f=m.querySelector('#lvf').value;let to=m.querySelector('#lvto').value;
+  if(!f)return;if(!to||to<f){to=f;m.querySelector('#lvto').value=f}
+  const wd=workdaysBetween(f,to);if(m._auto)m.querySelector('#lvd').value=wd;
+  const days=+m.querySelector('#lvd').value||0,b=leaveBal(e,t,f),T=ltype(t);
+  const hol=[];for(let d=f;d<=to&&hol.length<20;d=addDays(d,1))if(holidayName(d))hol.push(fmtD(d)+' '+holidayName(d));
+  let s=`${wd} working day${wd===1?'':'s'} in this period${hol.length?' (public holidays skipped: '+esc(hol.join(', '))+')':''}. `;
+  if(b.bal!=null)s+=`Available ${fd(b.bal)} → after this <b style="color:${b.bal-days<0?'var(--bad)':'var(--ok)'}">${fd(b.bal-days)}</b>.`;
+  if(b.note)s+=' '+esc(b.note)+'.';
+  if(T.cert&&days>+T.cert)s+=` <span style="color:var(--warn)">More than ${T.cert} days – a medical certificate may be required.</span>`;
+  if(b.bal!=null&&b.bal-days<0)s+=` <span style="color:var(--bad)">Not enough balance – consider recording the rest as unpaid leave.</span>`;
+  m.querySelector('#lvinfo').innerHTML=s;
+}
+function empLeaveModal(eid){
+  const e=emp(eid),L=LS();
+  const hist=(S.leave||[]).filter(r=>r.e===eid).sort((a,b)=>(b.from||'').localeCompare(a.from||''));
+  modal(`<div class="mhead">${avatar(e)}<div><h2>${esc(e.name)}</h2><div class="muted">Started ${fmtDL(startOf(e))}${e.start?'':' (first day worked – set a start date under People)'}</div></div><button class="x" data-act="close">×</button></div>
+  <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">${L.types.map(t=>{const b=leaveBal(e,t.id);return `<div class="card" style="cursor:default"><div class="stripe" style="background:${t.color}"></div><b>${esc(t.name)}</b>${t.paid?'':' <span class="pill p-out">unpaid</span>'}
+   <div style="font-size:26px;font-family:var(--mono);font-weight:700;margin:6px 0;color:${b.bal!=null&&b.bal<0?'var(--bad)':'inherit'}">${b.bal==null?fd(b.taken)+'<span class="muted" style="font-size:13px"> taken</span>':fd(b.bal)+'<span class="muted" style="font-size:13px"> days left</span>'}</div>
+   <div class="muted" style="font-size:12px">Cycle ${fmtD(b.cs)} ${b.cs.slice(0,4)} – ${fmtD(b.ce)} ${b.ce.slice(0,4)}<br>
+   ${t.mode==='accrue'?`Entitlement ${fd(b.ent)} · earned so far ${fd(b.accrued)} · carried in ${fd(b.carried)}<br>`:t.mode==='cycle'?`Entitlement ${fd(b.ent)} per cycle<br>`:''}Taken ${fd(b.taken)}${b.adj?` · adjustments ${b.adj>0?'+':''}${fd(b.adj)}`:''}${b.note?'<br>'+esc(b.note):''}</div></div>`}).join('')}</div>
+  <div class="panel sec"><h2>Opening balance / adjustment</h2><div class="muted" style="font-size:12px;margin-bottom:10px">Use this to bring in balances from before you started using the app (tracking starts ${fmtD(L.trackFrom)} ${L.trackFrom.slice(0,4)}), or to correct a balance. Positive adds days, negative removes days.</div>
+   <div class="row"><select id="adt">${L.types.filter(t=>t.mode!=='none').map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select><input type="number" step="0.5" id="add" placeholder="+/- days" style="width:110px"><input type="date" id="adday" value="${L.trackFrom>startOf(e)?L.trackFrom:startOf(e)}"><input type="text" id="adn" placeholder="Reason" style="flex:1"><button class="btn" data-act="addadj" data-v="${eid}">Add</button></div></div>
+  <div class="row sec"><h2 style="margin:0">History</h2><span class="sp"></span><button class="btn pri sm" data-act="newleave" data-e="${eid}">+ Record leave</button></div>
+  <table style="margin-top:8px"><tbody>${hist.map(r=>{const t=ltype(r.t);return `<tr ${r.adj?'':`style="cursor:pointer" data-act="editleave" data-v="${r.id}"`}><td><span class="dot" style="background:${t.color}"></span> ${esc(t.name)}</td><td>${r.adj?'<span class="pill p-done">adjustment</span>':''} ${fmtD(r.from)}${r.to&&r.to!==r.from?' – '+fmtD(r.to):''} ${(r.from||'').slice(0,4)}</td><td class="num">${+r.days>0&&r.adj?'+':''}${fd(+r.days)} d</td><td class="muted">${esc(r.note||'')}</td><td>${r.adj?`<button class="btn sm ghost" data-act="deladj" data-v="${r.id}" data-e="${eid}">✕</button>`:''}</td></tr>`}).join('')||'<tr><td class="muted">No leave recorded.</td></tr>'}</tbody></table>`,null,'wide');
+}
+function leaveRulesModal(){
+  const L=JSON.parse(JSON.stringify(LS()));
+  const row=(t,i)=>`<tr data-i="${i}"><td><input type="color" data-k="color" value="${t.color}" style="width:34px;height:30px;padding:1px;border:0;background:none"></td><td><input type="text" data-k="name" value="${esc(t.name)}" style="width:170px"></td>
+   <td><select data-k="mode">${[['accrue','Earned as you work'],['cycle','Fixed per cycle'],['none','Track only']].map(([k,l])=>`<option value="${k}" ${t.mode===k?'selected':''}>${l}</option>`).join('')}</select></td>
+   <td><input type="number" data-k="days" value="${t.days}" style="width:62px"></td><td><input type="number" data-k="cycle" value="${t.cycle}" style="width:62px"></td><td><input type="number" data-k="per" value="${t.per}" style="width:56px" title="1 day earned per N days worked (0 = full amount at start of cycle)"></td>
+   <td><input type="checkbox" data-k="carry" ${t.carry?'checked':''}> <input type="number" data-k="carryMax" value="${t.carryMax}" placeholder="no max" style="width:70px"></td>
+   <td><input type="number" data-k="extraAfter" value="${t.extraAfter}" style="width:44px"> → +<input type="number" data-k="extraDays" value="${t.extraDays}" style="width:44px"></td>
+   <td><input type="number" data-k="minMonths" value="${t.minMonths}" style="width:50px"></td><td><input type="number" data-k="firstMonths" value="${t.firstMonths}" style="width:44px"> / <input type="number" data-k="firstPer" value="${t.firstPer}" style="width:44px"></td>
+   <td><input type="number" data-k="cert" value="${t.cert}" style="width:44px"></td><td><input type="checkbox" data-k="paid" ${t.paid?'checked':''}></td><td>${['annual','sick','family'].includes(t.id)?'':`<button class="btn sm ghost" data-act="rmltype">✕</button>`}</td></tr>`;
+  modal(`<div class="mhead"><h2>Leave rules</h2><button class="x" data-act="close">×</button></div>
+  <div class="grid3"><label class="f">Leave cycle starts on<select id="lrb"><option value="anniv" ${L.basis==='anniv'?'selected':''}>Each person's start date (BCEA)</option><option value="calendar" ${L.basis==='calendar'?'selected':''}>1 January (12-month types)</option></select></label>
+  <label class="f">Track leave from<input type="date" id="lrf" value="${L.trackFrom}"></label>
+  <label class="f">Extra company holidays (e.g. shutdown)<textarea id="lrh" rows="2" placeholder="2026-12-28 Shutdown&#10;2026-12-29 Shutdown">${esc(L.extraHolidays||'')}</textarea></label></div>
+  <div class="tablewrap sec" style="margin-top:14px"><table id="lrt"><thead><tr><th></th><th>Type</th><th>How it works</th><th>Days</th><th>Cycle (months)</th><th>1 day / N worked</th><th>Carry over · max</th><th>After yrs → extra</th><th>Min. service (months)</th><th>First months / 1 per N</th><th>Cert after days</th><th>Paid</th><th></th></tr></thead><tbody>${L.types.map(row).join('')}</tbody></table></div>
+  <div class="row" style="margin-top:10px"><button class="btn sm" data-act="addltype">+ Add leave type</button><span class="sp"></span><button class="btn sm ghost" data-act="resetleave">Reset to SA defaults (BCEA / MEIBC)</button></div>
+  <div class="muted" style="font-size:12px;margin-top:12px;line-height:1.5"><b>Defaults:</b> Annual 15 working days a year (3 weeks), earned at 1 day per 17 days worked; MEIBC adds 1 week after 4 years' service · Sick 30 days per 36-month cycle, first 6 months 1 day per 26 days worked, certificate after 2 days · Family responsibility 3 days a year after 4 months' service · Parental 10 days and maternity 4 months are paid by UIF, not the employer. Public holidays (incl. Easter and Sunday→Monday) are skipped automatically. Check your own MEIBC registration and contracts – these are defaults, not legal advice.</div>
+  <div class="row" style="margin-top:18px"><span class="sp"></span><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="saverules">Save rules</button></div>`,m=>{m._row=row;m._L=L},'wide');
+}
+function leavePay(e,ws,we){ // paid leave in pay week -> [{label,h,rate}]
+  const out={};
+  for(let d=ws;d<=we;d=addDays(d,1)){
+    const r=leaveOn(e.id,d);if(!r)continue;const t=ltype(r.t);if(!t.paid||cellHours(e.id,d)>0)continue;
+    const wd=workdaysBetween(r.from,r.to||r.from)||1,frac=Math.min(1,(+r.days||0)/wd);
+    const h=(+S.settings.std[dow(d)]||0)*frac;if(!h)continue;
+    out[t.id]=out[t.id]||{label:t.name,h:0,days:0,rate:e.rate};out[t.id].h+=h;out[t.id].days+=frac;
+  }
+  return Object.values(out);
+}
 
 /* ---------- SETTINGS ---------- */
 function vSettings(app){
@@ -899,10 +1061,37 @@ document.addEventListener('click',async ev=>{
     case 'cin':clockIn(v,t.dataset.j);closeModal();render();toast(nm(emp(v))+' clocked in on '+job(t.dataset.j).code);break;
     case 'switch':{const h=clockOut(v,nowHM());clockIn(v,t.dataset.j);closeModal();render();toast('Switched to '+job(t.dataset.j).code+(h?' · '+h2(h)+' h booked':''));break}
     case 'cout':{const h=clockOut(v);closeModal();render();toast(nm(emp(v))+' clocked out · '+h2(h||0)+' h');break}
-    case 'mark':S.notes[v+'|'+todayISO()]={c:t.dataset.c,t:''};save();closeModal();render();break;
+    case 'mark':{const c=t.dataset.c,d=todayISO();
+      if(c==='leave'){leaveModal(null,{e:v,d});break}
+      if(c==='sick'){S.leave.push({id:uid(),e:v,t:'sick',from:d,to:d,days:1,note:'Marked on Today board'});save();closeModal();render();toast('1 sick day recorded');break}
+      S.notes[v+'|'+d]={c,t:''};save();closeModal();render();break}
+    case 'newleave':leaveModal(null,{e:t.dataset.e});break;
+    case 'editleave':leaveModal(v);break;
+    case 'empleave':empLeaveModal(v);break;
+    case 'leaverules':leaveRulesModal();break;
+    case 'saveleave':{const m=t.closest('.modal'),g=s=>m.querySelector(s);const f=g('#lvf').value,to=g('#lvto').value||f;if(!f)return toast('Pick a date');
+      const r={id:v||uid(),e:g('#lve').value,t:g('#lvt').value,from:f,to:to<f?f:to,days:+g('#lvd').value||0,note:g('#lvn').value.trim(),cert:g('#lvc').checked};
+      S.leave=S.leave.filter(x=>x.id!==r.id);S.leave.push(r);save();closeModal();render();toast(ltype(r.t).name+' saved: '+fd(r.days)+' day(s)');break}
+    case 'delleave':if(confirm('Delete this leave?')){S.leave=S.leave.filter(x=>x.id!==v);save();closeModal();render()}break;
+    case 'addadj':{const m=t.closest('.modal'),g=s=>m.querySelector(s);const days=parseFloat(g('#add').value);if(!days)return toast('Enter days, e.g. 5 or -2');
+      S.leave.push({id:uid(),e:v,t:g('#adt').value,from:g('#adday').value||todayISO(),days,note:g('#adn').value.trim()||'Opening balance / adjustment',adj:true});save();empLeaveModal(v);render();break}
+    case 'deladj':S.leave=S.leave.filter(x=>x.id!==v);save();empLeaveModal(t.dataset.e);render();break;
+    case 'addltype':{const m=t.closest('.modal');const n={id:'t'+uid(),name:'New leave type',color:PALETTE[Math.floor(Math.random()*PALETTE.length)],paid:true,mode:'cycle',days:1,cycle:12,per:0,carry:false,carryMax:'',extraAfter:0,extraDays:0,minMonths:0,firstMonths:0,firstPer:0,cert:0};m._L.types.push(n);m.querySelector('#lrt tbody').insertAdjacentHTML('beforeend',m._row(n,m._L.types.length-1));break}
+    case 'rmltype':{const tr=t.closest('tr'),m=t.closest('.modal');const id=m._L.types[+tr.dataset.i].id;if(S.leave.some(x=>x.t===id)&&!confirm('Leave has been recorded with this type. Remove the type anyway?'))return;m._L.types[+tr.dataset.i]=null;tr.remove();break}
+    case 'resetleave':if(confirm('Reset all leave rules to the South African defaults?')){S.settings.leave={...leaveDefaults(),trackFrom:LS().trackFrom,extraHolidays:LS().extraHolidays};save();leaveRulesModal();render()}break;
+    case 'saverules':{const m=t.closest('.modal'),L=m._L;
+      m.querySelectorAll('#lrt tbody tr').forEach(tr=>{const o=L.types[+tr.dataset.i];if(!o)return;tr.querySelectorAll('[data-k]').forEach(i=>{const k=i.dataset.k;o[k]=i.type==='checkbox'?i.checked:(['name','color','mode','carryMax'].includes(k)?i.value:(+i.value||0))})});
+      L.types=L.types.filter(Boolean);L.basis=m.querySelector('#lrb').value;L.trackFrom=m.querySelector('#lrf').value||L.trackFrom;L.extraHolidays=m.querySelector('#lrh').value;
+      S.settings.leave=L;save();closeModal();render();toast('Leave rules saved');break}
+    case 'leavecsv':{const ty=LS().types;const rows=[['Emp no','Name','Start',...ty.flatMap(x=>[x.name+' available',x.name+' taken (cycle)'])]];
+      activeEmps().forEach(e=>rows.push([e.no,e.name,startOf(e),...ty.flatMap(x=>{const b=leaveBal(e,x.id);return[b.bal==null?'':fd(b.bal),fd(b.taken)]})]));
+      rows.push([]);rows.push(['Leave records']);rows.push(['Name','Type','From','To','Days','Adjustment','Note']);
+      S.leave.slice().sort((a,b)=>(a.from||'').localeCompare(b.from||'')).forEach(r=>rows.push([emp(r.e).name,ltype(r.t).name,r.from,r.to||'',r.days,r.adj?'yes':'',r.note||'']));
+      dl('leave-balances-'+todayISO()+'.csv',csv(rows));break}
     case 'unmark':delete S.notes[v+'|'+todayISO()];save();closeModal();render();break;
     case 'stdday':{const d=todayISO(),h=+S.settings.std[dow(d)]||0;if(!h){toast('Standard hours for today is 0');return}
-      let n=0;for(const e of activeEmps()){if(cellEntries(e.id,d).length||S.clocks[e.id]||S.notes[e.id+'|'+d])continue;if(e.start&&e.start>d)continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
+      if(holidayName(d)){toast('Today is a public holiday: '+holidayName(d));return}
+      let n=0;for(const e of activeEmps()){if(cellEntries(e.id,d).length||S.clocks[e.id]||S.notes[e.id+'|'+d]||leaveOn(e.id,d))continue;if(e.start&&e.start>d)continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
       save();render();toast(n+' people given '+h+' h on '+job(S.settings.defJob).code);break}
     case 'wk':UI.week=v==='0'?weekStart(todayISO()):addDays(UI.week,7*+v);render();break;
     case 'cell':cellModal(t.dataset.e,t.dataset.d);break;
@@ -921,7 +1110,7 @@ document.addEventListener('click',async ev=>{
       if(av){const amt=+av.value||0;const ex=S.adv.filter(x=>x.e===e&&x.d===d);S.adv=S.adv.filter(x=>!(x.e===e&&x.d===d));if(amt)S.adv.push({id:uid(),e,d,amt,note:ex[0]?.note||'Advance'})}
       save();closeModal();render();break}
     case 'fillweek':{let n=0;const days=weekDays(UI.week);
-      for(const e of activeEmps())for(const d of days){const h=+S.settings.std[dow(d)]||0;if(!h)continue;if(e.start&&d<e.start)continue;if(e.end&&d>e.end)continue;if(cellEntries(e.id,d).length||S.notes[e.id+'|'+d])continue;if(d>todayISO())continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
+      for(const e of activeEmps())for(const d of days){const h=+S.settings.std[dow(d)]||0;if(!h)continue;if(e.start&&d<e.start)continue;if(e.end&&d>e.end)continue;if(cellEntries(e.id,d).length||S.notes[e.id+'|'+d])continue;if(d>todayISO()||holidayName(d)||leaveOn(e.id,d))continue;S.entries.push({id:uid(),e:e.id,d,j:S.settings.defJob,h,r:e.rate,src:'std'});n++}
       save();render();toast(n+' days filled (up to today)');break}
     case 'csvweek':{const ws=UI.week,days=weekDays(ws);const emps=empsForRange(ws,days[6]);
       const rows=[['Emp no','Name',...days.map(d=>DOW[dow(d)]+' '+d),'Total hours','Rate','Wages']];
@@ -960,6 +1149,7 @@ document.addEventListener('input',ev=>{
   const t=ev.target;
   if(t.dataset.filter==='jp'){const q=t.value.toLowerCase();document.querySelectorAll('#jp .jobbtn').forEach(b=>b.style.display=b.dataset.s.includes(q)?'':'none')}
   if(t.dataset.l==='h')updLnTot(t.closest('.modal'));
+  if(['lve','lvt','lvf','lvto','lvd'].includes(t.id)){const m=t.closest('.modal');if(t.id==='lvd')m._auto=false;if(t.id==='lvf'||t.id==='lvto')m._auto=true;updLeaveInfo(m)}
   if(t.dataset.act==='jobq'){UI.jobQ=t.value;const p=t.selectionStart;render();const n=document.querySelector('[data-act=jobq]');n.focus();n.setSelectionRange(p,p)}
 });
 document.addEventListener('change',ev=>{

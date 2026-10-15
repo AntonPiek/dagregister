@@ -170,7 +170,7 @@ hr{border:0;border-top:1px solid var(--line);margin:16px 0}
   body>*:not(#print){display:none!important}
   #print{display:block}
   .slip{border:0;margin:0 auto}
-  body{background:#fff}
+  html,body{background:#fff!important}
   .pr-table{color:#111}
   .pr-table th,.pr-table td{color:#111;background:#fff;border:1px solid #999;font-size:10px;padding:3px 5px}
 }
@@ -625,7 +625,7 @@ function jobPicker(mode,eid){
 /* ---------- REGISTER ---------- */
 function vRegister(app){
   const ws=UI.week,days=weekDays(ws),we=days[6],t=todayISO();
-  const emps=empsForRange(ws,we).filter(e=>!(e.end&&e.end<ws)||days.some(d=>cellEntries(e.id,d).length));
+  const emps=regEmps(ws);
   let tot=0,totW=0;const dayT=days.map(()=>0);
   const rows=emps.map(e=>{
     let eh=0,ew=0;
@@ -642,7 +642,7 @@ function vRegister(app){
       return `<td class="c ${d===t?'today':''} ${dow(d)===0||dow(d)===6?'we':''} ${lv&&!h?'c-leave':off&&!h?'c-absent':''}"><div class="cell ${h?'has':''}"><input inputmode="decimal" value="${h?h2(h):''}" placeholder="${off?'–':'·'}" data-cell="${e.id}|${d}" ${Object.keys(by).length>1?'title="Split over several jobs – click ⋯ to edit"':''}>${bars}${lvTag}${tag}${advTag}</div><button class="more" data-act="cell" data-e="${e.id}" data-d="${d}" title="Details / jobs / notes">⋯</button></td>`;
     }).join('');
     tot+=eh;totW+=ew;
-    return `<tr><td><div class="namecell">${avatar(e)}<div><b>${esc(nm(e))}</b>${!e.active?' <span class="pill p-out">inactive</span>':''}</div></div></td>${tds}<td class="num"><b>${h2(eh)}</b></td>${money_on()?`<td class="num">${money(e.rate)}</td><td class="num"><b>${money(ew)}</b></td>`:''}</tr>`;
+    return `<tr><td><div class="namecell">${avatar(e)}<div><b>${regSort()==='no'&&e.no!=null?'<span class="muted mono" style="font-weight:400">#'+e.no+'</span> ':''}${esc(nm(e))}</b>${!e.active?' <span class="pill p-out">inactive</span>':''}</div></div></td>${tds}<td class="num"><b>${h2(eh)}</b></td>${money_on()?`<td class="num">${money(e.rate)}</td><td class="num"><b>${money(ew)}</b></td>`:''}</tr>`;
   }).join('');
   app.innerHTML=`
   <div class="row"><div><h1>Week ${weekNo(ws)} · ${ws.slice(0,4)}</h1><div class="muted">${fmtDL(ws)} → ${fmtDL(we)} (pay week runs Friday to Thursday)</div></div><span class="sp"></span>
@@ -651,6 +651,7 @@ function vRegister(app){
   <div class="row sec" style="margin-top:14px">
    <span class="muted">Type hours straight into a cell (goes to the default job), or click ⋯ to split over jobs, add notes, absences or advances.</span><span class="sp"></span>
    <button class="btn" data-act="fillweek">⚡ Fill standard hours (empty cells)</button>
+   <div class="seg" title="Sort people"><button class="${regSort()==='name'?'on':''}" data-act="regsort" data-v="name">A–Z</button><button class="${regSort()==='no'?'on':''}" data-act="regsort" data-v="no">Emp no</button></div>
    <button class="btn" data-act="csvweek">⬇ CSV</button>
    <button class="btn" data-act="printweek">🖨 Print</button>
   </div>
@@ -827,13 +828,44 @@ function vReports(app){
   app.innerHTML=`<div class="row"><div><h1>Reports</h1><div class="muted">${fmtDL(a)} → ${fmtDL(b)}</div></div><span class="sp"></span>
   <div class="seg">${[['thisweek','This week'],['lastweek','Last week'],['12w','12 weeks'],['thismonth','This month'],['lastmonth','Last month'],['year','Year'],['custom','Custom']].map(([k,l])=>`<button class="${UI.range===k?'on':''}" data-act="range" data-v="${k}">${l}</button>`).join('')}</div>
   ${UI.range==='custom'?`<input type="date" value="${a}" data-act="from"><input type="date" value="${b}" data-act="to">`:''}
-  <button class="btn" data-act="csvrange">⬇ CSV</button></div>
+  <button class="btn" data-act="csvrange">⬇ CSV</button><button class="btn pri" data-act="printrep" data-v="all">🖨 Print report</button></div>
   <div class="kpis"><div class="kpi"><span>Hours worked</span><b>${h2(tot)}</b></div>${money_on()?`<div class="kpi"><span>Labour cost</span><b style="font-size:21px">${money(cost)}</b></div>`:''}<div class="kpi"><span>Attendance</span><b>${sched?Math.round(pres/sched*100)+'%':'—'}</b></div><div class="kpi"><span>Absent days</span><b style="color:var(--bad)">${abs}</b></div><div class="kpi"><span>Late / early</span><b style="color:var(--warn)">${late}</b></div><div class="kpi"><span>Jobs worked</span><b>${ja.length}</b></div></div>
-  <div class="grid2"><div class="panel"><h2>Hours by job</h2>${ja.map(([j,h])=>`<div class="hbar"><div class="lbl" title="${esc(job(j).name)}">${esc(job(j).code)} · ${esc(job(j).name)}</div><div class="t"><i style="width:${h/jm*100}%;background:${job(j).color}"></i></div><div class="mono" style="text-align:right">${h2(h)} h</div></div>`).join('')||'<div class="muted">No hours.</div>'}</div>
-  <div class="panel"><h2>Hours per day</h2><div class="cols">${days.map(d=>`<div title="${fmtDL(d)}: ${h2(byD[d]||0)} h" style="height:${(byD[d]||0)/dm*100}%;${dow(d)===5?'box-shadow:-2px 0 0 var(--line)':''}"></div>`).join('')}</div><div class="row muted" style="font-size:11px;margin-top:4px"><span>${fmtD(a)}</span><span class="sp"></span><span>${fmtD(b)}</span></div></div></div>
-  <div class="tablewrap sec"><table><thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Days worked</th><th class="num">Work days</th><th class="num">Attendance</th><th class="num">Absent</th><th class="num">Late/early</th>${money_on()?'<th class="num">Wages</th>':''}</tr></thead><tbody>
+  <div class="grid2"><div class="panel"><div class="row"><h2>Hours by job</h2><span class="sp"></span><button class="btn sm ghost" data-act="printrep" data-v="jobs" title="Print this">🖨</button></div>${ja.map(([j,h])=>`<div class="hbar"><div class="lbl" title="${esc(job(j).name)}">${esc(job(j).code)} · ${esc(job(j).name)}</div><div class="t"><i style="width:${h/jm*100}%;background:${job(j).color}"></i></div><div class="mono" style="text-align:right">${h2(h)} h</div></div>`).join('')||'<div class="muted">No hours.</div>'}</div>
+  <div class="panel"><div class="row"><h2>Hours per day</h2><span class="sp"></span><button class="btn sm ghost" data-act="printrep" data-v="days" title="Print this">🖨</button></div><div class="cols">${days.map(d=>`<div title="${fmtDL(d)}: ${h2(byD[d]||0)} h" style="height:${(byD[d]||0)/dm*100}%;${dow(d)===5?'box-shadow:-2px 0 0 var(--line)':''}"></div>`).join('')}</div><div class="row muted" style="font-size:11px;margin-top:4px"><span>${fmtD(a)}</span><span class="sp"></span><span>${fmtD(b)}</span></div></div></div>
+  <div class="row sec"><h2 style="margin:0">Per person</h2><span class="sp"></span><button class="btn sm" data-act="printrep" data-v="people">🖨 Print</button></div><div class="tablewrap" style="margin-top:8px"><table><thead><tr><th>Person</th><th class="num">Hours</th><th class="num">Days worked</th><th class="num">Work days</th><th class="num">Attendance</th><th class="num">Absent</th><th class="num">Late/early</th>${money_on()?'<th class="num">Wages</th>':''}</tr></thead><tbody>
   ${rows.sort((x,y)=>y.s.h-x.s.h).map(({e,s})=>`<tr data-act="emp" data-v="${e.id}" style="cursor:pointer"><td><div class="namecell">${avatar(e)}<b>${esc(nm(e))}</b></div></td><td class="num">${h2(s.h)}</td><td class="num">${s.present}</td><td class="num">${s.sched}</td><td class="num" style="color:${s.sched&&s.present/s.sched<.85?'var(--bad)':'inherit'}">${s.sched?Math.round(s.present/s.sched*100)+'%':'—'}</td><td class="num">${s.absent||''}</td><td class="num">${s.late||''}</td>${money_on()?`<td class="num">${money(s.wage)}</td>`:''}</tr>`).join('')}
   </tbody></table></div>`;
+}
+
+
+/* ---------- sorting & print helpers ---------- */
+function regSort(){try{return localStorage.getItem('dagregister.regSort')||'name'}catch(e){return 'name'}}
+function sortEmps(list){const m=regSort();return list.slice().sort((a,b)=>m==='no'?((a.no??1e9)-(b.no??1e9))||nm(a).localeCompare(nm(b)):nm(a).localeCompare(nm(b)))}
+function regEmps(ws){const days=weekDays(ws);return sortEmps(empsForRange(ws,days[6]).filter(e=>!(e.end&&e.end<ws)||days.some(d=>cellEntries(e.id,d).length)))}
+const PR_CSS='<style>.pr{font-family:Arial,Helvetica,sans-serif;color:#111;padding:8mm}.pr h2{margin:0 0 2px}.pr h3{margin:16px 0 6px;font-size:14px}.pr p{margin:0 0 10px;color:#444}.pr table{width:100%;border-collapse:collapse;margin-bottom:8px}.pr th,.pr td{border:1px solid #999;padding:4px 6px;font-size:11px;text-align:left;color:#111;background:#fff;position:static;text-transform:none;letter-spacing:0}.pr th{background:#eee!important}.pr .n{text-align:right;white-space:nowrap}.pr tr.tot td{font-weight:bold;background:#f4f4f4}.pr tr:hover td{background:#fff}.pr tr.tot:hover td{background:#f4f4f4}.pr .kp td{font-size:12px}.pr small{color:#555}@page{margin:10mm}</style>';
+function prDoc(title,sub,body){return PR_CSS+`<div class="pr"><h2>${esc(S.settings.company)} – ${esc(title)}</h2><p>${sub} · printed ${fmtDL(todayISO())}</p>${body}</div>`}
+function reportData(){
+  const[a,b]=rangeOf();
+  const ents=S.entries.filter(x=>x.d>=a&&x.d<=b);
+  const tot=ents.reduce((s,x)=>s+ +x.h,0),cost=ents.reduce((s,x)=>s+x.h*(x.r??emp(x.e).rate),0);
+  const byJ={},byJC={},byD={};
+  ents.forEach(x=>{byJ[x.j]=(byJ[x.j]||0)+ +x.h;byJC[x.j]=(byJC[x.j]||0)+x.h*(x.r??emp(x.e).rate);byD[x.d]=(byD[x.d]||0)+ +x.h});
+  let sched=0,pres=0,abs=0,late=0;
+  const rows=sortEmps(empsForRange(a,b)).map(e=>{const s=attStats(e.id,a,b<todayISO()?b:todayISO());sched+=s.sched;pres+=s.present;abs+=s.absent;late+=s.late;return{e,s}}).filter(r=>r.s.h||r.s.sched);
+  const ja=Object.entries(byJ).sort((x,y)=>y[1]-x[1]);
+  const days=[];for(let d=a;d<=b;d=addDays(d,1))days.push(d);
+  return{a,b,tot,cost,byJ,byJC,byD,rows,ja,days,sched,pres,abs,late};
+}
+function printReport(part){
+  const R=reportData(),M=money_on(),sub=`${fmtDL(R.a)} – ${fmtDL(R.b)}`;
+  const kpi=`<h3>Summary</h3><table class="kp"><tr><th>Hours worked</th>${M?'<th>Labour cost</th>':''}<th>Attendance</th><th>Absent days</th><th>Late / early</th><th>Jobs worked</th></tr><tr><td>${h2(R.tot)}</td>${M?`<td>${money(R.cost)}</td>`:''}<td>${R.sched?Math.round(R.pres/R.sched*100)+'%':'—'}</td><td>${R.abs}</td><td>${R.late}</td><td>${R.ja.length}</td></tr></table>`;
+  const jobs=`<h3>Hours by job</h3><table><tr><th>Job no</th><th>Job</th><th>Client</th><th class="n">Hours</th><th class="n">% of hours</th>${M?'<th class="n">Labour cost</th>':''}</tr>${R.ja.map(([j,h])=>`<tr><td>${esc(job(j).code)}</td><td>${esc(job(j).name)}</td><td>${esc(job(j).client||'')}</td><td class="n">${h2(h)}</td><td class="n">${R.tot?Math.round(h/R.tot*100):0}%</td>${M?`<td class="n">${money(R.byJC[j])}</td>`:''}</tr>`).join('')}<tr class="tot"><td colspan="3">Total</td><td class="n">${h2(R.tot)}</td><td class="n">100%</td>${M?`<td class="n">${money(R.cost)}</td>`:''}</tr></table>`;
+  const days=R.days.length<=62?`<h3>Hours per day</h3><table><tr><th>Date</th><th>Day</th><th class="n">Hours</th><th>Note</th></tr>${R.days.filter(d=>R.byD[d]||holidayName(d)).map(d=>`<tr><td>${d}</td><td>${DOW[dow(d)]}</td><td class="n">${h2(R.byD[d]||0)}</td><td>${esc(holidayName(d)||'')}</td></tr>`).join('')}<tr class="tot"><td colspan="2">Total</td><td class="n">${h2(R.tot)}</td><td></td></tr></table>`
+   :(()=>{const byW={};R.days.forEach(d=>{const w=weekStart(d);byW[w]=(byW[w]||0)+(R.byD[d]||0)});return `<h3>Hours per pay week</h3><table><tr><th>Week</th><th>From</th><th class="n">Hours</th></tr>${Object.keys(byW).sort().map(w=>`<tr><td>${weekNo(w)}</td><td>${fmtD(w)} ${w.slice(0,4)}</td><td class="n">${h2(byW[w])}</td></tr>`).join('')}<tr class="tot"><td colspan="2">Total</td><td class="n">${h2(R.tot)}</td></tr></table>`})();
+  const ppl=`<h3>Per person</h3><table><tr><th>No</th><th>Name</th><th class="n">Hours</th><th class="n">Days worked</th><th class="n">Work days</th><th class="n">Attendance</th><th class="n">Absent</th><th class="n">Late/early</th>${M?'<th class="n">Rate</th><th class="n">Wages</th>':''}</tr>${R.rows.map(({e,s})=>`<tr><td>${e.no??''}</td><td>${esc(e.name)}</td><td class="n">${h2(s.h)}</td><td class="n">${s.present}</td><td class="n">${s.sched}</td><td class="n">${s.sched?Math.round(s.present/s.sched*100)+'%':'—'}</td><td class="n">${s.absent||''}</td><td class="n">${s.late||''}</td>${M?`<td class="n">${money(e.rate)}</td><td class="n">${money(s.wage)}</td>`:''}</tr>`).join('')}<tr class="tot"><td colspan="2">Total</td><td class="n">${h2(R.rows.reduce((x,r)=>x+r.s.h,0))}</td><td class="n">${R.pres}</td><td class="n">${R.sched}</td><td class="n">${R.sched?Math.round(R.pres/R.sched*100)+'%':''}</td><td class="n">${R.abs}</td><td class="n">${R.late}</td>${M?`<td></td><td class="n">${money(R.rows.reduce((x,r)=>x+r.s.wage,0))}</td>`:''}</tr></table>`;
+  const parts={all:[kpi,jobs,ppl,days],jobs:[jobs],people:[ppl],days:[days]};
+  const titles={all:'Report',jobs:'Hours by job',people:'Report per person',days:'Hours per day'};
+  doPrint(prDoc(titles[part]||'Report',sub,parts[part].join('')));
 }
 
 /* ---------- PAYSLIPS ---------- */
@@ -1163,8 +1195,11 @@ document.addEventListener('click',async ev=>{
       rows.push([]);rows.push(['Entries per job']);rows.push(['Date','Name','Job','Hours']);
       S.entries.filter(x=>x.d>=ws&&x.d<=days[6]).forEach(x=>rows.push([x.d,emp(x.e).name,job(x.j).code+' '+job(x.j).name,x.h]));
       dl(`register-week-${weekNo(ws)}-${ws.slice(0,4)}.csv`,csv(rows));break}
-    case 'printweek':{const ws=UI.week,days=weekDays(ws);const emps=empsForRange(ws,days[6]);
-      doPrint(`<div style="font-family:Arial;color:#111;padding:10mm"><h2 style="margin:0">${esc(S.settings.company)} – Aanwesigheid register</h2><p>Week ${weekNo(ws)}: ${fmtDL(ws)} – ${fmtDL(days[6])}</p><table class="pr-table" style="width:100%;border-collapse:collapse"><tr><th>Name</th>${days.map(d=>`<th>${DOW[dow(d)]} ${fmtD(d)}</th>`).join('')}<th>Total</th></tr>${emps.map(e=>`<tr><td>${esc(e.name)}</td>${days.map(d=>{const h=cellHours(e.id,d),n=S.notes[e.id+'|'+d];return `<td>${h?h2(h):''} ${n?'<small>'+esc(CODES[n.c]?.l||'')+'</small>':''}</td>`}).join('')}<td><b>${h2(days.reduce((a,d)=>a+cellHours(e.id,d),0))}</b></td></tr>`).join('')}</table></div>`);break}
+    case 'printweek':{const ws=UI.week,days=weekDays(ws),emps=regEmps(ws),M=money_on();let gT=0,dT=days.map(()=>0);
+      const body=`<table><tr><th>No</th><th>Name</th>${days.map(d=>`<th class="n">${DOW[dow(d)]}<br>${fmtD(d)}${holidayName(d)?'<br><small>PH</small>':''}</th>`).join('')}<th class="n">Total hrs</th>${M?'<th class="n">Rate</th><th class="n">Wages</th>':''}</tr>${emps.map(e=>{let w=0;const hs=days.map((d,i)=>{const en=cellEntries(e.id,d),h=en.reduce((a,x)=>a+ +x.h,0);w+=en.reduce((a,x)=>a+x.h*(x.r??e.rate),0);dT[i]+=h;const n=S.notes[e.id+'|'+d],lv=leaveOn(e.id,d);return `<td class="n">${h?h2(h):''}${lv&&!h?'<small>'+esc(ltype(lv.t).name.split(' ')[0])+'</small>':''}${n?' <small>'+esc(CODES[n.c]?.l||'')+'</small>':''}</td>`}).join('');const th=days.reduce((a,d)=>a+cellHours(e.id,d),0);gT+=w;return `<tr><td>${e.no??''}</td><td>${esc(e.name)}</td>${hs}<td class="n"><b>${h2(th)}</b></td>${M?`<td class="n">${money(e.rate)}</td><td class="n"><b>${money(w)}</b></td>`:''}</tr>`}).join('')}<tr class="tot"><td colspan="2">Total</td>${dT.map(h=>`<td class="n">${h?h2(h):''}</td>`).join('')}<td class="n">${h2(dT.reduce((a,b)=>a+b,0))}</td>${M?`<td></td><td class="n">${money(gT)}</td>`:''}</tr></table>`;
+      doPrint(prDoc('Aanwesigheid register',`Week ${weekNo(ws)}: ${fmtDL(ws)} – ${fmtDL(days[6])}`,body));break}
+    case 'regsort':try{localStorage.setItem('dagregister.regSort',v)}catch(e){}render();break;
+    case 'printrep':printReport(v);break;
     case 'jobf':UI.jobFilter=v;render();break;
     case 'job':jobModal(v);break;
     case 'newjob':jobModal('');break;
